@@ -2,103 +2,130 @@
 
 Ollama-compatible HTTP server for the [OpenAI Privacy Filter](https://huggingface.co/openai/privacy-filter) (OPF) model. Drop-in replacement for the `/api/chat` endpoint when you want PII detection instead of text generation.
 
-Because OPF is a token classifier, the assistant reply returned from `/api/chat` is a **JSON array of detected PII spans**, not generated text.
+Because OPF is a token classifier (not a generative LLM), the assistant reply returned from `/api/chat` is a **JSON array of detected PII spans**, not generated text.
 
-## Install
+[![ci](https://github.com/outgate-ai/openai-privacy-filter-api/actions/workflows/ci.yml/badge.svg)](https://github.com/outgate-ai/openai-privacy-filter-api/actions/workflows/ci.yml)
+[![docker](https://github.com/outgate-ai/openai-privacy-filter-api/actions/workflows/docker.yml/badge.svg)](https://github.com/outgate-ai/openai-privacy-filter-api/actions/workflows/docker.yml)
+
+## Quick start
+
+### Docker (recommended)
+
+CPU:
+```bash
+docker run --rm -p 11435:11435 \
+  -v "$HOME/.opf:/home/opf/.opf" \
+  ghcr.io/outgate-ai/openai-privacy-filter-api:latest
+```
+
+GPU (NVIDIA):
+```bash
+docker run --rm --gpus all -p 11435:11435 \
+  -v "$HOME/.opf:/home/opf/.opf" \
+  ghcr.io/outgate-ai/openai-privacy-filter-api:latest-cuda
+```
+
+The `-v "$HOME/.opf:/home/opf/.opf"` mount persists the ~3GB model checkpoint across container restarts. Without it, the model re-downloads on every run.
+
+### Python (pip)
 
 ```bash
 pip install git+https://github.com/outgate-ai/openai-privacy-filter-api.git
+opf-api --device cpu      # or --device cuda
 ```
 
-This also installs the upstream `opf` package from GitHub.
-
-## Run
+## Call it
 
 ```bash
-opf-api --host 127.0.0.1 --port 11435 --device cuda
-```
-
-Flags:
-
-- `--host` (default `127.0.0.1`)
-- `--port` (default `11435` — Ollama itself uses `11434`)
-- `--device` `cuda` (default) or `cpu`
-- `--model-path` override OPF checkpoint dir (default: `$OPF_CHECKPOINT` or `~/.opf/privacy_filter`)
-
-On first run, if the checkpoint is missing the server logs a clear "downloading from Hugging Face" message and pulls it automatically (via the upstream `opf` package).
-
-## Endpoints
-
-### `POST /api/chat`
-
-Request (Ollama-compatible):
-
-```json
-{
+curl -s http://127.0.0.1:11435/api/chat -H 'content-type: application/json' -d '{
   "model": "openai-privacy-filter",
-  "messages": [
-    { "role": "user", "content": "My name is Alice and my email is alice@example.com" }
-  ],
+  "messages": [{"role": "user", "content": "Contact i@izs.me"}],
   "stream": false
-}
+}' | jq
 ```
-
-- `stream: true` is **rejected with HTTP 400**.
-- Only the **last `user` message** is analyzed.
-- `options.*` (e.g. `temperature`, `num_predict`) are silently ignored.
-- `model` is echoed back in the response; any value is accepted.
 
 Response:
-
 ```json
 {
   "model": "openai-privacy-filter",
   "created_at": "2026-04-24T09:46:46.944230Z",
   "message": {
     "role": "assistant",
-    "content": "[{\"text\": \"Alice\", \"category\": \"private_person\"}, {\"text\": \"alice@example.com\", \"category\": \"private_email\"}]"
+    "content": "[{\"text\": \"i@izs.me\", \"category\": \"private_email\"}]"
   },
   "done": true,
   "done_reason": "stop",
   "total_duration": 22953715,
-  "prompt_eval_count": 54,
+  "prompt_eval_count": 17,
   "eval_count": 0
 }
 ```
 
-The `content` field is a JSON-encoded string containing an array of detected spans. Categories are passed through from OPF unchanged:
+## Contract
 
-- `private_person`
-- `private_email`
-- `private_phone`
-- `private_address`
-- `private_url`
-- `private_date`
-- `account_number`
-- `secret`
+### `POST /api/chat`
 
-When no PII is detected, `content` is `"[]"`.
+- Ollama-compatible request shape: `{ model, messages, stream, options? }`
+- `stream: true` → **HTTP 400** (streaming not supported)
+- Only the **last `user` message** is analyzed
+- `options.*` (e.g. `temperature`, `num_predict`) are silently ignored
+- `model` field accepts any string and is echoed back unchanged
+- `message.content` is a **JSON-encoded string** (not fenced) containing an array of spans:
 
-### `GET /api/tags`
+  ```json
+  [{"text": "Alice", "category": "private_person"}, {"text": "i@izs.me", "category": "private_email"}]
+  ```
 
-Lists the one available model (`openai-privacy-filter`). Implemented so clients that probe the Ollama server don't break.
+- Empty array `"[]"` when no PII is detected
+- Categories come straight from OPF:
+  `private_person`, `private_email`, `private_phone`, `private_address`,
+  `private_url`, `private_date`, `account_number`, `secret`
 
-### `GET /api/version`
+### Other endpoints
 
-Returns this server's version.
+| Endpoint | Purpose |
+|----------|---------|
+| `GET /api/tags` | Lists the one advertised model — for Ollama client compatibility. |
+| `GET /api/version` | Server version. |
+| `GET /health` | Returns engine state: `loading` / `ready` / `error`. |
+| `POST /api/generate` | **400** — use `/api/chat`. |
+| `POST /api/embeddings` | **400** — not supported. |
 
-### `GET /health`
+### Headers
 
-Returns `{"status": "ready" | "loading" | "error", "error": ...}`.
+- `x-request-id` — echoed back if set by the caller, otherwise a new UUID is generated and returned.
 
-### Unsupported
+## Configuration
 
-- `POST /api/generate` → 400
-- `POST /api/embeddings` → 400
+All settings are available as CLI flags and environment variables. **CLI > env > default.** See [ENVIRONMENT.md](ENVIRONMENT.md) for the full table.
 
-## Why port `11435`?
+| Flag | Env var | Default |
+|------|---------|---------|
+| `--host` | `OPF_API_HOST` | `127.0.0.1` |
+| `--port` | `OPF_API_PORT` | `11435` |
+| `--device` | `OPF_API_DEVICE` | `cuda` |
+| `--model-path` | `OPF_API_MODEL_PATH` | `~/.opf/privacy_filter` |
+| `--model-name` | `OPF_API_MODEL_NAME` | `openai-privacy-filter` |
+| `--log-level` | `OPF_API_LOG_LEVEL` | `info` |
 
-Ollama itself defaults to `11434`. We use `11435` so both can run side by side. Change with `--port 11434` if you want a true drop-in replacement.
+Upstream `OPF_*` tuning variables (`OPF_ALLOW_TF32`, `OPF_MOE_TRITON`, etc.) are passed through untouched — see [ENVIRONMENT.md](ENVIRONMENT.md).
+
+## Development
+
+```bash
+python3.12 -m venv .venv
+source .venv/bin/activate
+pip install --index-url https://download.pytorch.org/whl/cpu "torch>=2.4"
+pip install -e ".[dev]"
+pytest -q
+ruff check src tests
+```
+
+The test suite uses a fake engine — it runs in under a second and does not download the model.
+
+## Why port 11435?
+
+Ollama itself defaults to `11434`. We default to `11435` so both can run on the same host. Override with `--port 11434` (and bring down the real Ollama) for a true drop-in replacement.
 
 ## License
 

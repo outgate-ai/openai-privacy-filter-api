@@ -1,4 +1,4 @@
-"""Wrapper around the OPF Python API with startup-time model load and download checks."""
+"""OPF engine wrapper: eager startup load with checkpoint-missing detection."""
 
 from __future__ import annotations
 
@@ -7,27 +7,37 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 from threading import Lock
-from typing import Literal
+from typing import Literal, Protocol
 
 logger = logging.getLogger(__name__)
 
 DEFAULT_CHECKPOINT_DIR = Path.home() / ".opf" / "privacy_filter"
 
 
-@dataclass
-class DetectedSpanOut:
+@dataclass(frozen=True)
+class DetectedSpan:
     text: str
     category: str
 
 
+class Engine(Protocol):
+    @property
+    def state(self) -> str: ...
+    @property
+    def error(self) -> str | None: ...
+    def load(self) -> None: ...
+    def redact(self, text: str) -> list[DetectedSpan]: ...
+
+
 class OPFEngine:
-    """Lazy-but-eager wrapper around opf.OPF.
+    """Eagerly loads the OPF model at startup and exposes a simple redact() API."""
 
-    Loads the model once at startup. If the checkpoint directory is missing,
-    logs a clear "downloading" message before the (slow) HuggingFace pull.
-    """
-
-    def __init__(self, *, device: Literal["cpu", "cuda"] = "cuda", model_path: str | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        device: Literal["cpu", "cuda"] = "cuda",
+        model_path: str | None = None,
+    ) -> None:
         self._device = device
         self._model_path = model_path
         self._opf = None
@@ -76,14 +86,11 @@ class OPFEngine:
                 logger.exception("Failed to load Privacy Filter")
                 raise
 
-    def redact(self, text: str) -> list[DetectedSpanOut]:
+    def redact(self, text: str) -> list[DetectedSpan]:
         if self._state != "ready" or self._opf is None:
             raise RuntimeError(f"engine not ready (state={self._state})")
         result = self._opf.redact(text)
-        spans = []
-        for span in result.detected_spans:
-            spans.append(DetectedSpanOut(text=span.text, category=span.label))
-        return spans
+        return [DetectedSpan(text=s.text, category=s.label) for s in result.detected_spans]
 
     def _resolve_checkpoint_path(self) -> Path:
         if self._model_path:
@@ -95,8 +102,4 @@ class OPFEngine:
 
     @staticmethod
     def _checkpoint_present(path: Path) -> bool:
-        if not path.exists() or not path.is_dir():
-            return False
-        if not (path / "config.json").exists():
-            return False
-        return True
+        return path.is_dir() and (path / "config.json").exists()

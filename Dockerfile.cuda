@@ -1,0 +1,42 @@
+# GPU image — CUDA 12.4 runtime + cuDNN, Python 3.12, GPU-enabled torch.
+FROM nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04 AS base
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    DEBIAN_FRONTEND=noninteractive \
+    OPF_API_HOST=0.0.0.0 \
+    OPF_API_PORT=11435 \
+    OPF_API_DEVICE=cuda
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        software-properties-common curl git ca-certificates \
+    && add-apt-repository -y ppa:deadsnakes/ppa \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends \
+        python3.12 python3.12-venv python3.12-dev python3-pip \
+    && rm -rf /var/lib/apt/lists/* \
+    && ln -sf /usr/bin/python3.12 /usr/local/bin/python \
+    && ln -sf /usr/bin/python3.12 /usr/local/bin/python3
+
+WORKDIR /app
+
+COPY pyproject.toml README.md LICENSE ./
+COPY src ./src
+
+RUN python -m pip install --upgrade pip \
+    && python -m pip install --index-url https://download.pytorch.org/whl/cu124 "torch>=2.4" \
+    && python -m pip install .
+
+RUN useradd --create-home --uid 1000 opf
+USER opf
+WORKDIR /home/opf
+
+EXPOSE 11435
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=600s --retries=3 \
+    CMD curl -fsS http://127.0.0.1:${OPF_API_PORT}/health || exit 1
+
+ENTRYPOINT ["opf-api"]

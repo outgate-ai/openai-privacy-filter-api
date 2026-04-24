@@ -17,12 +17,31 @@ dependencies = [
     "opf @ git+https://github.com/openai/privacy-filter.git",
 ]
 
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "httpx>=0.27",
+    "ruff>=0.4",
+]
+
 [project.scripts]
-opf-api = "openai_privacy_filter_api.__main__:main"
+opf-api = "opf_api.__main__:main"
 
 [project.urls]
 Homepage = "https://github.com/outgate-ai/openai-privacy-filter-api"
 Issues = "https://github.com/outgate-ai/openai-privacy-filter-api/issues"
 
 [tool.setuptools.packages.find]
-include = ["openai_privacy_filter_api*"]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM"]
+ignore = ["E501"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
