@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "openai-privacy-filter-api"
+version = "0.1.0"
+description = "Ollama-compatible HTTP server exposing OpenAI Privacy Filter (OPF) as a drop-in /api/chat endpoint."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "Apache-2.0" }
+authors = [{ name = "outgate-ai" }]
+dependencies = [
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.27",
+    "pydantic>=2.5",
+    "opf @ git+https://github.com/openai/privacy-filter.git",
+]
+
+[project.scripts]
+opf-api = "openai_privacy_filter_api.__main__:main"
+
+[project.urls]
+Homepage = "https://github.com/outgate-ai/openai-privacy-filter-api"
+Issues = "https://github.com/outgate-ai/openai-privacy-filter-api/issues"
+
+[tool.setuptools.packages.find]
+include = ["openai_privacy_filter_api*"]
