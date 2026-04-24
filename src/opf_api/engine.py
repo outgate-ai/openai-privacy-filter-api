@@ -37,9 +37,17 @@ class OPFEngine:
         *,
         device: Literal["cpu", "cuda"] = "cuda",
         model_path: str | None = None,
+        context_window_length: int | None = None,
+        output_mode: Literal["typed", "redacted"] = "typed",
+        decode_mode: Literal["viterbi", "argmax"] = "viterbi",
+        viterbi_calibration_path: str | None = None,
     ) -> None:
         self._device = device
         self._model_path = model_path
+        self._context_window_length = context_window_length
+        self._output_mode = output_mode
+        self._decode_mode = decode_mode
+        self._viterbi_calibration_path = viterbi_calibration_path
         self._opf = None
         self._state: Literal["unloaded", "loading", "ready", "error"] = "unloaded"
         self._error: str | None = None
@@ -75,11 +83,23 @@ class OPFEngine:
                 self._opf = OPF(
                     model=self._model_path,
                     device=self._device,
-                    output_mode="typed",
+                    output_mode=self._output_mode,
+                    decode_mode=self._decode_mode,
+                    context_window_length=self._context_window_length,
                 )
+                if self._viterbi_calibration_path and self._decode_mode == "viterbi":
+                    self._opf.set_viterbi_decoder(
+                        calibration_path=self._viterbi_calibration_path
+                    )
                 self._opf.get_runtime()
                 self._state = "ready"
-                logger.info("Privacy Filter ready (device=%s)", self._device)
+                logger.info(
+                    "Privacy Filter ready (device=%s, n_ctx=%s, output_mode=%s, decode_mode=%s)",
+                    self._device,
+                    self._context_window_length,
+                    self._output_mode,
+                    self._decode_mode,
+                )
             except Exception as exc:
                 self._state = "error"
                 self._error = str(exc)

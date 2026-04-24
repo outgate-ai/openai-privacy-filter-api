@@ -15,6 +15,10 @@ def test_defaults_when_no_env(monkeypatch):
         "OPF_API_MODEL_PATH",
         "OPF_API_MODEL_NAME",
         "OPF_API_LOG_LEVEL",
+        "OPF_API_CONTEXT_WINDOW_LENGTH",
+        "OPF_API_OUTPUT_MODE",
+        "OPF_API_DECODE_MODE",
+        "OPF_API_VITERBI_CALIBRATION_PATH",
     ):
         monkeypatch.delenv(key, raising=False)
 
@@ -25,6 +29,34 @@ def test_defaults_when_no_env(monkeypatch):
     assert cfg.model_path is None
     assert cfg.model_name == "openai-privacy-filter"
     assert cfg.log_level == "info"
+    assert cfg.context_window_length == 131072
+    assert cfg.output_mode == "typed"
+    assert cfg.decode_mode == "viterbi"
+    assert cfg.viterbi_calibration_path is None
+
+
+def test_context_window_above_max_rejected(monkeypatch):
+    monkeypatch.setenv("OPF_API_CONTEXT_WINDOW_LENGTH", "200000")
+    with pytest.raises(ValueError):
+        Config.from_env()
+
+
+def test_invalid_output_mode_rejected(monkeypatch):
+    monkeypatch.setenv("OPF_API_OUTPUT_MODE", "weird")
+    with pytest.raises(ValueError):
+        Config.from_env()
+
+
+def test_override_rejects_invalid_context_window(monkeypatch):
+    for key in (
+        "OPF_API_CONTEXT_WINDOW_LENGTH",
+        "OPF_API_OUTPUT_MODE",
+        "OPF_API_DECODE_MODE",
+    ):
+        monkeypatch.delenv(key, raising=False)
+    cfg = Config.from_env()
+    with pytest.raises(ValueError):
+        cfg.override(context_window_length=0)
 
 
 def test_env_values_applied(monkeypatch):

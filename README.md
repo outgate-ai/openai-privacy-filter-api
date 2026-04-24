@@ -107,6 +107,12 @@ All settings are available as CLI flags and environment variables. **CLI > env >
 | `--model-path` | `OPF_API_MODEL_PATH` | `~/.opf/privacy_filter` |
 | `--model-name` | `OPF_API_MODEL_NAME` | `openai-privacy-filter` |
 | `--log-level` | `OPF_API_LOG_LEVEL` | `info` |
+| `--context-window-length` | `OPF_API_CONTEXT_WINDOW_LENGTH` | `131072` (128k, model max) |
+| `--output-mode` | `OPF_API_OUTPUT_MODE` | `typed` |
+| `--decode-mode` | `OPF_API_DECODE_MODE` | `viterbi` |
+| `--viterbi-calibration-path` | `OPF_API_VITERBI_CALIBRATION_PATH` | unset |
+
+We default `--context-window-length` to the model's 128k maximum. OPF is small (50M active params), so this fits on most hardware, but the buffer is allocated at load time — if you run on a memory-constrained host, lower it. See [ENVIRONMENT.md](ENVIRONMENT.md) for details.
 
 Upstream `OPF_*` tuning variables (`OPF_ALLOW_TF32`, `OPF_MOE_TRITON`, etc.) are passed through untouched — see [ENVIRONMENT.md](ENVIRONMENT.md).
 

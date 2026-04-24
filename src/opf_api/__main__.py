@@ -44,6 +44,30 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help="Log level: debug|info|warning|error (env: OPF_API_LOG_LEVEL)",
     )
+    parser.add_argument(
+        "--context-window-length",
+        type=int,
+        default=None,
+        help="Max context length in tokens, up to 131072 (env: OPF_API_CONTEXT_WINDOW_LENGTH)",
+    )
+    parser.add_argument(
+        "--output-mode",
+        choices=["typed", "redacted"],
+        default=None,
+        help="typed keeps per-category labels; redacted collapses to one (env: OPF_API_OUTPUT_MODE)",
+    )
+    parser.add_argument(
+        "--decode-mode",
+        choices=["viterbi", "argmax"],
+        default=None,
+        help="Span decoder: viterbi (coherent) or argmax (faster) (env: OPF_API_DECODE_MODE)",
+    )
+    parser.add_argument(
+        "--viterbi-calibration-path",
+        default=None,
+        help="Path to a Viterbi calibration artifact for precision/recall tuning "
+        "(env: OPF_API_VITERBI_CALIBRATION_PATH)",
+    )
     args = parser.parse_args(argv)
 
     cfg = Config.from_env().override(
@@ -53,6 +77,10 @@ def main(argv: list[str] | None = None) -> int:
         model_path=args.model_path,
         model_name=args.model_name,
         log_level=args.log_level,
+        context_window_length=args.context_window_length,
+        output_mode=args.output_mode,
+        decode_mode=args.decode_mode,
+        viterbi_calibration_path=args.viterbi_calibration_path,
     )
 
     logging.basicConfig(
@@ -64,6 +92,10 @@ def main(argv: list[str] | None = None) -> int:
         device=cfg.device,
         model_path=cfg.model_path,
         model_name=cfg.model_name,
+        context_window_length=cfg.context_window_length,
+        output_mode=cfg.output_mode,
+        decode_mode=cfg.decode_mode,
+        viterbi_calibration_path=cfg.viterbi_calibration_path,
     )
     uvicorn.run(app, host=cfg.host, port=cfg.port, log_level=cfg.log_level)
     return 0

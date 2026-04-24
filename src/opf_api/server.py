@@ -45,6 +45,10 @@ def create_app(
     device: str = "cuda",
     model_path: str | None = None,
     model_name: str = MODEL_NAME_DEFAULT,
+    context_window_length: int | None = None,
+    output_mode: str = "typed",
+    decode_mode: str = "viterbi",
+    viterbi_calibration_path: str | None = None,
 ) -> FastAPI:
     """Build the FastAPI app.
 
@@ -53,7 +57,14 @@ def create_app(
     """
     owned_engine = engine is None
     if engine is None:
-        engine = OPFEngine(device=device, model_path=model_path)  # type: ignore[arg-type]
+        engine = OPFEngine(  # type: ignore[arg-type]
+            device=device,
+            model_path=model_path,
+            context_window_length=context_window_length,
+            output_mode=output_mode,
+            decode_mode=decode_mode,
+            viterbi_calibration_path=viterbi_calibration_path,
+        )
 
     @asynccontextmanager
     async def lifespan(_: FastAPI):
