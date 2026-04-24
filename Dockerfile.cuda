@@ -1,5 +1,7 @@
-# GPU image — CUDA 12.4 runtime + cuDNN, Python 3.12, GPU-enabled torch.
-FROM nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04 AS base
+# GPU image — CUDA 12.8 runtime + cuDNN, Python 3.12, GPU-enabled torch.
+# CUDA 12.8 is required for Blackwell (sm_120, RTX 50xx); it also covers older
+# architectures back to sm_70 (Volta).
+FROM nvidia/cuda:12.8.1-cudnn-runtime-ubuntu22.04 AS base
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -12,7 +14,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
-        software-properties-common curl git ca-certificates \
+        software-properties-common curl git ca-certificates gosu \
     && add-apt-repository -y ppa:deadsnakes/ppa \
     && apt-get update \
     && apt-get install -y --no-install-recommends \
@@ -28,11 +30,17 @@ WORKDIR /app
 COPY pyproject.toml README.md LICENSE ./
 COPY src ./src
 
-RUN python -m pip install --index-url https://download.pytorch.org/whl/cu124 "torch>=2.4" \
+# torch>=2.7 with cu128 wheels is required for Blackwell sm_120 support.
+RUN python -m pip install --index-url https://download.pytorch.org/whl/cu128 "torch>=2.7" \
     && python -m pip install .
 
-RUN useradd --create-home --uid 1000 opf
-USER opf
+RUN useradd --create-home --uid 1000 opf \
+    && mkdir -p /home/opf/.opf \
+    && chown -R opf:opf /home/opf
+
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
 WORKDIR /home/opf
 
 EXPOSE 11435
@@ -40,4 +48,4 @@ EXPOSE 11435
 HEALTHCHECK --interval=30s --timeout=5s --start-period=600s --retries=3 \
     CMD curl -fsS http://127.0.0.1:${OPF_API_PORT}/health || exit 1
 
-ENTRYPOINT ["opf-api"]
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
