@@ -94,6 +94,16 @@ Response:
 ### Headers
 
 - `x-request-id` — echoed back if set by the caller, otherwise a new UUID is generated and returned.
+- `authorization: Bearer <token>` or `x-api-key: <token>` — **required on all `/api/*` endpoints when `OPF_API_AUTH_TOKEN` is set.** Unauthenticated requests return HTTP 401 with `WWW-Authenticate: Bearer`. `/health` is exempt so orchestrators can still probe it. Leave the env var unset to run open (default).
+
+Example with auth:
+
+```bash
+curl -s http://127.0.0.1:11435/api/chat \
+  -H "authorization: Bearer $OPF_API_AUTH_TOKEN" \
+  -H 'content-type: application/json' \
+  -d '{"model":"openai-privacy-filter","messages":[{"role":"user","content":"Contact i@izs.me"}],"stream":false}'
+```
 
 ## Configuration
 
@@ -111,6 +121,7 @@ All settings are available as CLI flags and environment variables. **CLI > env >
 | `--output-mode` | `OPF_API_OUTPUT_MODE` | `typed` |
 | `--decode-mode` | `OPF_API_DECODE_MODE` | `viterbi` |
 | `--viterbi-calibration-path` | `OPF_API_VITERBI_CALIBRATION_PATH` | unset |
+| `--auth-token` | `OPF_API_AUTH_TOKEN` | unset (open) |
 
 We default `--context-window-length` to the model's 128k maximum. OPF is small (50M active params), so this fits on most hardware, but the buffer is allocated at load time — if you run on a memory-constrained host, lower it. See [ENVIRONMENT.md](ENVIRONMENT.md) for details.
 

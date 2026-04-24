@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hmac
 import json
 import logging
 import time
@@ -10,7 +11,7 @@ from collections.abc import Iterable
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 
 from . import MODEL_NAME_DEFAULT, __version__
@@ -39,6 +40,45 @@ def _extract_last_user_content(messages: Iterable[ChatMessage]) -> str | None:
     return None
 
 
+def _extract_presented_token(request: Request) -> str | None:
+    """Pull a bearer/api-key token from either Authorization or X-API-Key."""
+    auth = request.headers.get("authorization", "")
+    if auth:
+        parts = auth.split(None, 1)
+        if len(parts) == 2 and parts[0].lower() == "bearer":
+            return parts[1].strip() or None
+    api_key = request.headers.get("x-api-key", "").strip()
+    return api_key or None
+
+
+def _make_auth_dependency(expected_token: str | None):
+    """Build a FastAPI dependency that enforces auth when a token is configured."""
+    if not expected_token:
+        async def _noop() -> None:
+            return None
+
+        return _noop
+
+    async def _require_auth(request: Request) -> None:
+        presented = _extract_presented_token(request)
+        if presented is None or not hmac.compare_digest(presented, expected_token):
+            client_host = request.client.host if request.client else "?"
+            logger.warning(
+                "auth failed rid=%s ip=%s path=%s reason=%s",
+                getattr(request.state, "request_id", "?"),
+                client_host,
+                request.url.path,
+                "missing" if presented is None else "mismatch",
+            )
+            raise HTTPException(
+                status_code=401,
+                detail="invalid or missing authentication token",
+                headers={"WWW-Authenticate": 'Bearer realm="opf-api"'},
+            )
+
+    return _require_auth
+
+
 def create_app(
     *,
     engine: Engine | None = None,
@@ -49,6 +89,7 @@ def create_app(
     output_mode: str = "typed",
     decode_mode: str = "viterbi",
     viterbi_calibration_path: str | None = None,
+    auth_token: str | None = None,
 ) -> FastAPI:
     """Build the FastAPI app.
 
@@ -78,6 +119,12 @@ def create_app(
         description="Ollama-compatible /api/chat server for the OpenAI Privacy Filter model.",
         lifespan=lifespan,
     )
+
+    require_auth = _make_auth_dependency(auth_token)
+    if auth_token:
+        logger.info("authentication enabled on /api/* endpoints")
+    else:
+        logger.info("authentication disabled (set OPF_API_AUTH_TOKEN to enable)")
 
     @app.middleware("http")
     async def request_id_middleware(request: Request, call_next):
@@ -110,17 +157,17 @@ def create_app(
     async def health():
         return {"status": engine.state, "error": engine.error}
 
-    @app.get("/api/version")
+    @app.get("/api/version", dependencies=[Depends(require_auth)])
     async def api_version() -> VersionResponse:
         return VersionResponse(version=__version__)
 
-    @app.get("/api/tags")
+    @app.get("/api/tags", dependencies=[Depends(require_auth)])
     async def api_tags() -> TagsResponse:
         return TagsResponse(
             models=[TagModel(name=model_name, model=model_name, modified_at=_iso_now())]
         )
 
-    @app.post("/api/chat")
+    @app.post("/api/chat", dependencies=[Depends(require_auth)])
     async def api_chat(req: ChatRequest):
         if req.stream:
             raise HTTPException(status_code=400, detail="stream=true is not supported")

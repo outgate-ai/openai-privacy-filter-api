@@ -19,6 +19,7 @@ def test_defaults_when_no_env(monkeypatch):
         "OPF_API_OUTPUT_MODE",
         "OPF_API_DECODE_MODE",
         "OPF_API_VITERBI_CALIBRATION_PATH",
+        "OPF_API_AUTH_TOKEN",
     ):
         monkeypatch.delenv(key, raising=False)
 
@@ -33,6 +34,13 @@ def test_defaults_when_no_env(monkeypatch):
     assert cfg.output_mode == "typed"
     assert cfg.decode_mode == "viterbi"
     assert cfg.viterbi_calibration_path is None
+    assert cfg.auth_token is None
+
+
+def test_auth_token_from_env(monkeypatch):
+    monkeypatch.setenv("OPF_API_AUTH_TOKEN", "s3cret")
+    cfg = Config.from_env()
+    assert cfg.auth_token == "s3cret"
 
 
 def test_context_window_above_max_rejected(monkeypatch):

@@ -53,6 +53,7 @@ class Config:
     output_mode: Literal["typed", "redacted"]
     decode_mode: Literal["viterbi", "argmax"]
     viterbi_calibration_path: str | None
+    auth_token: str | None
 
     @classmethod
     def from_env(cls) -> Config:
@@ -76,6 +77,7 @@ class Config:
             ),
             viterbi_calibration_path=os.environ.get("OPF_API_VITERBI_CALIBRATION_PATH")
             or None,
+            auth_token=os.environ.get("OPF_API_AUTH_TOKEN") or None,
         )
 
     def override(
@@ -91,6 +93,7 @@ class Config:
         output_mode: str | None = None,
         decode_mode: str | None = None,
         viterbi_calibration_path: str | None = None,
+        auth_token: str | None = None,
     ) -> Config:
         if context_window_length is not None:
             _validate_context_window(context_window_length)
@@ -121,6 +124,7 @@ class Config:
                 if viterbi_calibration_path is not None
                 else self.viterbi_calibration_path
             ),
+            auth_token=auth_token if auth_token is not None else self.auth_token,
         )
 
 

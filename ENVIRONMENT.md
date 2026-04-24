@@ -13,6 +13,12 @@
 | `OPF_API_MODEL_NAME` | `openai-privacy-filter` | The model name advertised on `GET /api/tags` **and required** as the `model` field on `POST /api/chat`. Requests with any other `model` value return HTTP 404. Change this only if you want to hide behind a different identifier (e.g. to mimic an existing Ollama tag your client already calls). |
 | `OPF_API_LOG_LEVEL` | `info` | Log level: `debug`, `info`, `warning`, or `error`. |
 
+## Authentication
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `OPF_API_AUTH_TOKEN` | unset (auth disabled) | Shared secret required by all `/api/*` endpoints when set. Clients must send `Authorization: Bearer <token>` or `X-API-Key: <token>`. Requests without a valid token return HTTP 401 with `WWW-Authenticate: Bearer`. `/health` is always open so orchestrators can probe readiness without credentials. Token comparison uses `hmac.compare_digest` (constant-time). Failed attempts are logged at `warning` with the client IP and request ID. |
+
 ## Model-behavior variables
 
 These control what the model outputs and how long an input it can process.

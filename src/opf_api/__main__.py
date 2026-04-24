@@ -68,6 +68,12 @@ def main(argv: list[str] | None = None) -> int:
         help="Path to a Viterbi calibration artifact for precision/recall tuning "
         "(env: OPF_API_VITERBI_CALIBRATION_PATH)",
     )
+    parser.add_argument(
+        "--auth-token",
+        default=None,
+        help="If set, /api/* endpoints require Authorization: Bearer <token> or "
+        "X-API-Key: <token> (env: OPF_API_AUTH_TOKEN). Unset means auth disabled.",
+    )
     args = parser.parse_args(argv)
 
     cfg = Config.from_env().override(
@@ -81,6 +87,7 @@ def main(argv: list[str] | None = None) -> int:
         output_mode=args.output_mode,
         decode_mode=args.decode_mode,
         viterbi_calibration_path=args.viterbi_calibration_path,
+        auth_token=args.auth_token,
     )
 
     logging.basicConfig(
@@ -96,6 +103,7 @@ def main(argv: list[str] | None = None) -> int:
         output_mode=cfg.output_mode,
         decode_mode=cfg.decode_mode,
         viterbi_calibration_path=cfg.viterbi_calibration_path,
+        auth_token=cfg.auth_token,
     )
     uvicorn.run(app, host=cfg.host, port=cfg.port, log_level=cfg.log_level)
     return 0
