@@ -16,18 +16,19 @@ RUN apt-get update \
     && add-apt-repository -y ppa:deadsnakes/ppa \
     && apt-get update \
     && apt-get install -y --no-install-recommends \
-        python3.12 python3.12-venv python3.12-dev python3-pip \
+        python3.12 python3.12-venv python3.12-dev \
     && rm -rf /var/lib/apt/lists/* \
     && ln -sf /usr/bin/python3.12 /usr/local/bin/python \
-    && ln -sf /usr/bin/python3.12 /usr/local/bin/python3
+    && ln -sf /usr/bin/python3.12 /usr/local/bin/python3 \
+    && python -m ensurepip --upgrade \
+    && python -m pip install --upgrade pip
 
 WORKDIR /app
 
 COPY pyproject.toml README.md LICENSE ./
 COPY src ./src
 
-RUN python -m pip install --upgrade pip \
-    && python -m pip install --index-url https://download.pytorch.org/whl/cu124 "torch>=2.4" \
+RUN python -m pip install --index-url https://download.pytorch.org/whl/cu124 "torch>=2.4" \
     && python -m pip install .
 
 RUN useradd --create-home --uid 1000 opf
