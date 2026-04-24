@@ -1,7 +1,9 @@
-# GPU image — CUDA 12.8 runtime + cuDNN, Python 3.12, GPU-enabled torch.
+# GPU image — CUDA 12.8 devel + cuDNN, Python 3.12, GPU-enabled torch.
 # CUDA 12.8 is required for Blackwell (sm_120, RTX 50xx); it also covers older
-# architectures back to sm_70 (Volta).
-FROM nvidia/cuda:12.8.1-cudnn-runtime-ubuntu22.04 AS base
+# architectures back to sm_70 (Volta). We use the *devel* base (not runtime)
+# because OPF's MoE uses Triton kernels that are JIT-compiled at first use and
+# require both a C compiler (gcc) and the CUDA headers.
+FROM nvidia/cuda:12.8.1-cudnn-devel-ubuntu22.04 AS base
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -10,11 +12,14 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     DEBIAN_FRONTEND=noninteractive \
     OPF_API_HOST=0.0.0.0 \
     OPF_API_PORT=11435 \
-    OPF_API_DEVICE=cuda
+    OPF_API_DEVICE=cuda \
+    CC=gcc \
+    CXX=g++
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         software-properties-common curl git ca-certificates gosu \
+        gcc g++ \
     && add-apt-repository -y ppa:deadsnakes/ppa \
     && apt-get update \
     && apt-get install -y --no-install-recommends \

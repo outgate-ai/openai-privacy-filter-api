@@ -106,6 +106,19 @@ def test_chat_503_when_engine_not_ready(fake_engine, client):
     assert resp.status_code == 503
 
 
+def test_chat_500_does_not_leak_internal_error_details(fake_engine, client):
+    def _boom(_text):
+        raise RuntimeError("SECRET_KERNEL_PATH=/internal/weights.bin missing")
+
+    fake_engine.redact = _boom
+    resp = client.post("/api/chat", json=_chat_request("hi"))
+    assert resp.status_code == 500
+    detail = resp.json()["detail"]
+    assert "SECRET_KERNEL_PATH" not in detail
+    assert "/internal/weights.bin" not in detail
+    assert detail == "internal error during redaction"
+
+
 def test_chat_sets_request_id_header(client):
     resp = client.post("/api/chat", json=_chat_request("Nothing sensitive here."))
     assert "x-request-id" in resp.headers

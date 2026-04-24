@@ -195,7 +195,9 @@ def create_app(
             spans = engine.redact(last_user)
         except Exception as exc:
             logger.exception("redaction failed")
-            raise HTTPException(status_code=500, detail=f"redaction failed: {exc}") from exc
+            raise HTTPException(
+                status_code=500, detail="internal error during redaction"
+            ) from exc
         total_duration = time.perf_counter_ns() - t0
 
         payload = [{"text": s.text, "category": s.category} for s in spans]
