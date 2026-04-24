@@ -10,7 +10,7 @@
 | `OPF_API_PORT` | `11435` | TCP port to listen on. Ollama itself uses `11434`; the default here avoids a collision. |
 | `OPF_API_DEVICE` | `cuda` | Inference device. One of `cpu` or `cuda`. Must be `cpu` if no NVIDIA GPU is available. |
 | `OPF_API_MODEL_PATH` | unset | Override the OPF checkpoint directory. If unset, falls back to `OPF_CHECKPOINT`, then `~/.opf/privacy_filter`. Missing checkpoints are auto-downloaded from Hugging Face on first load. |
-| `OPF_API_MODEL_NAME` | `openai-privacy-filter` | The model name advertised on `GET /api/tags`. Clients can still send any `model` field in `/api/chat` and it will be echoed back. |
+| `OPF_API_MODEL_NAME` | `openai-privacy-filter` | The model name advertised on `GET /api/tags` **and required** as the `model` field on `POST /api/chat`. Requests with any other `model` value return HTTP 404. Change this only if you want to hide behind a different identifier (e.g. to mimic an existing Ollama tag your client already calls). |
 | `OPF_API_LOG_LEVEL` | `info` | Log level: `debug`, `info`, `warning`, or `error`. |
 
 ## Model-behavior variables

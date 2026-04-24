@@ -69,7 +69,7 @@ Response:
 - `stream: true` → **HTTP 400** (streaming not supported)
 - Only the **last `user` message** is analyzed
 - `options.*` (e.g. `temperature`, `num_predict`) are silently ignored
-- `model` field accepts any string and is echoed back unchanged
+- `model` must equal the configured server name (default `openai-privacy-filter`, set via `OPF_API_MODEL_NAME`). Any other value — including an empty string — returns **HTTP 404** with an Ollama-style "model not found" message. This prevents clients from sending requests intended for `llama3` / `glm-4` / etc. and getting silently answered by a PII filter.
 - `message.content` is a **JSON-encoded string** (not fenced) containing an array of spans:
 
   ```json

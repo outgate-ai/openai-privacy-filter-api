@@ -125,6 +125,15 @@ def create_app(
         if req.stream:
             raise HTTPException(status_code=400, detail="stream=true is not supported")
 
+        if not req.model or req.model != model_name:
+            raise HTTPException(
+                status_code=404,
+                detail=(
+                    f"model {req.model!r} not found, "
+                    f"this server only serves {model_name!r}"
+                ),
+            )
+
         if engine.state != "ready":
             raise HTTPException(
                 status_code=503, detail=f"engine not ready (state={engine.state})"
@@ -146,7 +155,7 @@ def create_app(
         content = json.dumps(payload, ensure_ascii=False)
 
         response = ChatResponse(
-            model=req.model or model_name,
+            model=model_name,
             created_at=_iso_now(),
             message=ChatResponseMessage(role="assistant", content=content),
             done=True,

@@ -44,10 +44,23 @@ def test_chat_rejects_stream_true(client):
     assert "stream" in resp.json()["detail"]
 
 
-def test_chat_echoes_arbitrary_model_name(client):
+def test_chat_rejects_unknown_model_name(client):
     resp = client.post("/api/chat", json=_chat_request("hi", model="glm-5.1:cloud"))
+    assert resp.status_code == 404
+    assert "not found" in resp.json()["detail"]
+
+
+def test_chat_rejects_empty_model_name(client):
+    resp = client.post("/api/chat", json=_chat_request("hi", model=""))
+    assert resp.status_code == 404
+
+
+def test_chat_accepts_configured_model_name(client):
+    resp = client.post(
+        "/api/chat", json=_chat_request("Nothing sensitive here.", model="openai-privacy-filter")
+    )
     assert resp.status_code == 200
-    assert resp.json()["model"] == "glm-5.1:cloud"
+    assert resp.json()["model"] == "openai-privacy-filter"
 
 
 def test_chat_ignores_options(client):
