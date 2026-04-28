@@ -51,7 +51,7 @@ Response:
   "created_at": "2026-04-24T09:46:46.944230Z",
   "message": {
     "role": "assistant",
-    "content": "[{\"text\": \"i@izs.me\", \"category\": \"private_email\"}]"
+    "content": "{\"detections\": [{\"text\": \"i@izs.me\", \"category\": \"personal_information\", \"source_category\": \"private_email\"}]}"
   },
   "done": true,
   "done_reason": "stop",
@@ -70,16 +70,29 @@ Response:
 - Only the **last `user` message** is analyzed
 - `options.*` (e.g. `temperature`, `num_predict`) are silently ignored
 - `model` must equal the configured server name (default `openai-privacy-filter`, set via `OPF_API_MODEL_NAME`). Any other value — including an empty string — returns **HTTP 404** with an Ollama-style "model not found" message. This prevents clients from sending requests intended for `llama3` / `glm-4` / etc. and getting silently answered by a PII filter.
-- `message.content` is a **JSON-encoded string** (not fenced) containing an array of spans:
+- `message.content` is a **JSON-encoded string** (not fenced) containing a wrapped detections object suitable for the [outgate-ai guardrail](https://github.com/outgate-ai/regional-stack/tree/main/services/guardrail) service:
 
   ```json
-  [{"text": "Alice", "category": "private_person"}, {"text": "i@izs.me", "category": "private_email"}]
+  {
+    "detections": [
+      {"text": "Alice", "category": "personal_information", "source_category": "private_person"},
+      {"text": "i@izs.me", "category": "personal_information", "source_category": "private_email"}
+    ]
+  }
   ```
 
-- Empty array `"[]"` when no PII is detected
-- Categories come straight from OPF:
-  `private_person`, `private_email`, `private_phone`, `private_address`,
-  `private_url`, `private_date`, `account_number`, `secret`
+- Empty case: `{"detections": []}`.
+- `category` is one of the guardrail risk categories: `personal_information` or `credentials`.
+- `source_category` preserves OPF's native label so downstream consumers can filter or report at finer granularity.
+
+#### OPF → guardrail category mapping
+
+| OPF native `source_category` | Guardrail `category` |
+|---|---|
+| `private_person`, `private_email`, `private_phone`, `private_address`, `private_date`, `account_number` | `personal_information` |
+| `private_url`, `secret` | `credentials` |
+
+Unknown OPF labels (forward-compat, in case the upstream model adds new categories) fall back to `personal_information` and emit a warning log.
 
 ### Other endpoints
 

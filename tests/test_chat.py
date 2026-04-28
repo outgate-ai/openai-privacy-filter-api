@@ -11,7 +11,7 @@ def _chat_request(content: str, *, stream: bool = False, model: str = "openai-pr
     }
 
 
-def test_chat_returns_detected_spans_as_json_string(client, parsed_content):
+def test_chat_returns_detections_in_guardrail_shape(client, parsed_content):
     resp = client.post("/api/chat", json=_chat_request("Contact i@izs.me and Alice."))
     assert resp.status_code == 200
     body = resp.json()
@@ -25,17 +25,50 @@ def test_chat_returns_detected_spans_as_json_string(client, parsed_content):
     assert body["prompt_eval_count"] == len("Contact i@izs.me and Alice.")
     assert body["total_duration"] >= 0
 
-    spans = parsed_content(body)
-    assert spans == [
-        {"text": "i@izs.me", "category": "private_email"},
-        {"text": "Alice", "category": "private_person"},
+    detections = parsed_content(body)
+    assert detections == [
+        {
+            "text": "i@izs.me",
+            "category": "personal_information",
+            "source_category": "private_email",
+        },
+        {
+            "text": "Alice",
+            "category": "personal_information",
+            "source_category": "private_person",
+        },
     ]
 
 
-def test_chat_empty_results_returns_empty_array(client, parsed_content):
+def test_chat_maps_credential_labels_to_credentials(client, parsed_content):
+    resp = client.post(
+        "/api/chat",
+        json=_chat_request("Token sk-abc and visit https://x.io/secret"),
+    )
+    assert resp.status_code == 200
+    detections = parsed_content(resp.json())
+    assert detections == [
+        {
+            "text": "sk-abc",
+            "category": "credentials",
+            "source_category": "secret",
+        },
+        {
+            "text": "https://x.io/secret",
+            "category": "credentials",
+            "source_category": "private_url",
+        },
+    ]
+
+
+def test_chat_empty_results_returns_empty_detections(client, parsed_content):
     resp = client.post("/api/chat", json=_chat_request("Nothing sensitive here."))
     assert resp.status_code == 200
     assert parsed_content(resp.json()) == []
+    # Verify the wrapped shape is present even when empty.
+    import json as _json
+    body = resp.json()
+    assert _json.loads(body["message"]["content"]) == {"detections": []}
 
 
 def test_chat_rejects_stream_true(client):

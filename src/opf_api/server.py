@@ -15,6 +15,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 
 from . import MODEL_NAME_DEFAULT, __version__
+from .categories import map_category
 from .engine import Engine, OPFEngine
 from .models import (
     ChatMessage,
@@ -200,8 +201,15 @@ def create_app(
             ) from exc
         total_duration = time.perf_counter_ns() - t0
 
-        payload = [{"text": s.text, "category": s.category} for s in spans]
-        content = json.dumps(payload, ensure_ascii=False)
+        detections = [
+            {
+                "text": s.text,
+                "category": map_category(s.category),
+                "source_category": s.category,
+            }
+            for s in spans
+        ]
+        content = json.dumps({"detections": detections}, ensure_ascii=False)
 
         response = ChatResponse(
             model=model_name,

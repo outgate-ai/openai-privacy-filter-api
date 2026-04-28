@@ -40,6 +40,10 @@ def fake_engine() -> FakeEngine:
                 DetectedSpan(text="i@izs.me", category="private_email"),
                 DetectedSpan(text="Alice", category="private_person"),
             ],
+            "Token sk-abc and visit https://x.io/secret": [
+                DetectedSpan(text="sk-abc", category="secret"),
+                DetectedSpan(text="https://x.io/secret", category="private_url"),
+            ],
             "Nothing sensitive here.": [],
         }
     )
@@ -54,9 +58,14 @@ def client(fake_engine: FakeEngine) -> TestClient:
 
 @pytest.fixture
 def parsed_content():
-    """Parse the JSON-encoded assistant message content."""
+    """Parse the JSON-encoded assistant message content and return the
+    detections list from the wrapped ``{"detections": [...]}`` shape."""
 
     def _parse(response_json: dict) -> list[dict]:
-        return json.loads(response_json["message"]["content"])
+        body = json.loads(response_json["message"]["content"])
+        assert isinstance(body, dict) and "detections" in body, (
+            f"expected wrapped {{detections: [...]}} payload, got {body!r}"
+        )
+        return body["detections"]
 
     return _parse
