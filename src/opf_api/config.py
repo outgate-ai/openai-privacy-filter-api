@@ -30,6 +30,24 @@ def _env_int(key: str, default: int) -> int:
         raise ValueError(f"env var {key} must be an integer (got {value!r})") from exc
 
 
+_BOOL_TRUE = {"1", "true", "yes", "on"}
+_BOOL_FALSE = {"0", "false", "no", "off"}
+
+
+def _env_bool(key: str, default: bool) -> bool:
+    value = os.environ.get(key)
+    if value is None or value == "":
+        return default
+    lowered = value.strip().lower()
+    if lowered in _BOOL_TRUE:
+        return True
+    if lowered in _BOOL_FALSE:
+        return False
+    raise ValueError(
+        f"env var {key} must be one of true/false/1/0/yes/no/on/off (got {value!r})"
+    )
+
+
 def _env_choice(key: str, choices: tuple[str, ...], default: str) -> str:
     value = os.environ.get(key)
     if value is None or value == "":
@@ -54,6 +72,7 @@ class Config:
     decode_mode: Literal["viterbi", "argmax"]
     viterbi_calibration_path: str | None
     auth_token: str | None
+    normalize_whitespace: bool
 
     @classmethod
     def from_env(cls) -> Config:
@@ -78,6 +97,9 @@ class Config:
             viterbi_calibration_path=os.environ.get("OPF_API_VITERBI_CALIBRATION_PATH")
             or None,
             auth_token=os.environ.get("OPF_API_AUTH_TOKEN") or None,
+            normalize_whitespace=_env_bool(
+                "OPF_API_NORMALIZE_WHITESPACE", default=True
+            ),
         )
 
     def override(
@@ -94,6 +116,7 @@ class Config:
         decode_mode: str | None = None,
         viterbi_calibration_path: str | None = None,
         auth_token: str | None = None,
+        normalize_whitespace: bool | None = None,
     ) -> Config:
         if context_window_length is not None:
             _validate_context_window(context_window_length)
@@ -125,6 +148,11 @@ class Config:
                 else self.viterbi_calibration_path
             ),
             auth_token=auth_token if auth_token is not None else self.auth_token,
+            normalize_whitespace=(
+                normalize_whitespace
+                if normalize_whitespace is not None
+                else self.normalize_whitespace
+            ),
         )
 
 

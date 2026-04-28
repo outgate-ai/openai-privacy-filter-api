@@ -135,6 +135,9 @@ All settings are available as CLI flags and environment variables. **CLI > env >
 | `--decode-mode` | `OPF_API_DECODE_MODE` | `viterbi` |
 | `--viterbi-calibration-path` | `OPF_API_VITERBI_CALIBRATION_PATH` | unset |
 | `--auth-token` | `OPF_API_AUTH_TOKEN` | unset (open) |
+| `--normalize-whitespace` / `--no-normalize-whitespace` | `OPF_API_NORMALIZE_WHITESPACE` | `true` |
+
+OPF's recall on multi-line input (emails, OCR'd PDFs, address blocks) improves substantially when newlines/tabs are flattened to single spaces, so the server does this by default. The flattening also defensively decodes literal `\n` / `\r` / `\t` escape sequences that arrive when clients double-encode their JSON body. Disable with `OPF_API_NORMALIZE_WHITESPACE=false` if you need raw input passthrough.
 
 We default `--context-window-length` to the model's 128k maximum. OPF is small (50M active params), so this fits on most hardware, but the buffer is allocated at load time — if you run on a memory-constrained host, lower it. See [ENVIRONMENT.md](ENVIRONMENT.md) for details.
 

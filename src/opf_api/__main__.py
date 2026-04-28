@@ -74,6 +74,23 @@ def main(argv: list[str] | None = None) -> int:
         help="If set, /api/* endpoints require Authorization: Bearer <token> or "
         "X-API-Key: <token> (env: OPF_API_AUTH_TOKEN). Unset means auth disabled.",
     )
+    norm_group = parser.add_mutually_exclusive_group()
+    norm_group.add_argument(
+        "--normalize-whitespace",
+        dest="normalize_whitespace",
+        action="store_true",
+        default=None,
+        help="Collapse all whitespace runs (incl. literal \\\\n / \\\\r / \\\\t) to "
+        "single spaces before redaction. Improves recall on multi-line input. "
+        "Default on. (env: OPF_API_NORMALIZE_WHITESPACE=true)",
+    )
+    norm_group.add_argument(
+        "--no-normalize-whitespace",
+        dest="normalize_whitespace",
+        action="store_false",
+        default=None,
+        help="Pass content to the model unchanged (env: OPF_API_NORMALIZE_WHITESPACE=false).",
+    )
     args = parser.parse_args(argv)
 
     cfg = Config.from_env().override(
@@ -88,6 +105,7 @@ def main(argv: list[str] | None = None) -> int:
         decode_mode=args.decode_mode,
         viterbi_calibration_path=args.viterbi_calibration_path,
         auth_token=args.auth_token,
+        normalize_whitespace=args.normalize_whitespace,
     )
 
     logging.basicConfig(
@@ -104,6 +122,7 @@ def main(argv: list[str] | None = None) -> int:
         decode_mode=cfg.decode_mode,
         viterbi_calibration_path=cfg.viterbi_calibration_path,
         auth_token=cfg.auth_token,
+        normalize_whitespace_input=cfg.normalize_whitespace,
     )
     uvicorn.run(app, host=cfg.host, port=cfg.port, log_level=cfg.log_level)
     return 0

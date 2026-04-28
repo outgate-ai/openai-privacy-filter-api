@@ -13,6 +13,12 @@
 | `OPF_API_MODEL_NAME` | `openai-privacy-filter` | The model name advertised on `GET /api/tags` **and required** as the `model` field on `POST /api/chat`. Requests with any other `model` value return HTTP 404. Change this only if you want to hide behind a different identifier (e.g. to mimic an existing Ollama tag your client already calls). |
 | `OPF_API_LOG_LEVEL` | `info` | Log level: `debug`, `info`, `warning`, or `error`. |
 
+## Input preprocessing
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `OPF_API_NORMALIZE_WHITESPACE` | `true` | When `true` (default), the server collapses every run of whitespace in the user content to a single space — including real newlines/tabs/NBSP **and** literal two-character escape sequences (`\\n`, `\\r`, `\\t`) that arrive when clients double-encode the JSON body. Empirically improves recall on multi-line input (emails with signature blocks, OCR'd PDFs, German address blocks, etc.) where line breaks would otherwise split spans the model would catch on a single line. Set to `false` if you need to pass content through unchanged. Accepts `true`/`false`/`1`/`0`/`yes`/`no`/`on`/`off`. |
+
 ## Authentication
 
 | Variable | Default | Description |

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "openai-privacy-filter-api"
-version = "0.2.0"
+version = "0.2.1"
 description = "Ollama-compatible HTTP server exposing OpenAI Privacy Filter (OPF) as a drop-in /api/chat endpoint."
 readme = "README.md"
 requires-python = ">=3.10"

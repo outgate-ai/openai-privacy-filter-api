@@ -165,3 +165,31 @@ def test_chat_echoes_request_id_header(client):
         headers={"x-request-id": "my-trace-id"},
     )
     assert resp.headers["x-request-id"] == "my-trace-id"
+
+
+def test_chat_normalizes_whitespace_by_default(client, fake_engine):
+    resp = client.post(
+        "/api/chat",
+        json=_chat_request("Contact i@izs.me\nand\n\nAlice."),
+    )
+    assert resp.status_code == 200
+    # The engine sees a flattened single-line input, not the original newlines.
+    assert fake_engine.redact_calls[-1] == "Contact i@izs.me and Alice."
+
+
+def test_chat_normalize_whitespace_off_passes_input_through(fake_engine):
+    from fastapi.testclient import TestClient
+
+    from opf_api.server import create_app
+
+    app = create_app(
+        engine=fake_engine,
+        model_name="openai-privacy-filter",
+        normalize_whitespace_input=False,
+    )
+    with TestClient(app) as raw_client:
+        raw_client.post(
+            "/api/chat",
+            json=_chat_request("Contact i@izs.me\nand\n\nAlice."),
+        )
+    assert fake_engine.redact_calls[-1] == "Contact i@izs.me\nand\n\nAlice."

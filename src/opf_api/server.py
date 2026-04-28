@@ -26,6 +26,7 @@ from .models import (
     TagsResponse,
     VersionResponse,
 )
+from .preprocess import normalize_whitespace
 
 logger = logging.getLogger(__name__)
 
@@ -91,6 +92,7 @@ def create_app(
     decode_mode: str = "viterbi",
     viterbi_calibration_path: str | None = None,
     auth_token: str | None = None,
+    normalize_whitespace_input: bool = True,
 ) -> FastAPI:
     """Build the FastAPI app.
 
@@ -190,6 +192,9 @@ def create_app(
         last_user = _extract_last_user_content(req.messages)
         if last_user is None:
             raise HTTPException(status_code=400, detail="no user message found in request")
+
+        if normalize_whitespace_input:
+            last_user = normalize_whitespace(last_user)
 
         t0 = time.perf_counter_ns()
         try:

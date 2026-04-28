@@ -20,6 +20,7 @@ def test_defaults_when_no_env(monkeypatch):
         "OPF_API_DECODE_MODE",
         "OPF_API_VITERBI_CALIBRATION_PATH",
         "OPF_API_AUTH_TOKEN",
+        "OPF_API_NORMALIZE_WHITESPACE",
     ):
         monkeypatch.delenv(key, raising=False)
 
@@ -35,6 +36,19 @@ def test_defaults_when_no_env(monkeypatch):
     assert cfg.decode_mode == "viterbi"
     assert cfg.viterbi_calibration_path is None
     assert cfg.auth_token is None
+    assert cfg.normalize_whitespace is True
+
+
+def test_normalize_whitespace_disabled_via_env(monkeypatch):
+    monkeypatch.setenv("OPF_API_NORMALIZE_WHITESPACE", "false")
+    cfg = Config.from_env()
+    assert cfg.normalize_whitespace is False
+
+
+def test_normalize_whitespace_invalid_value_rejected(monkeypatch):
+    monkeypatch.setenv("OPF_API_NORMALIZE_WHITESPACE", "maybe")
+    with pytest.raises(ValueError):
+        Config.from_env()
 
 
 def test_auth_token_from_env(monkeypatch):
