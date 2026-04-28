@@ -3,6 +3,11 @@
 # architectures back to sm_70 (Volta). We use the *devel* base (not runtime)
 # because OPF's MoE uses Triton kernels that are JIT-compiled at first use and
 # require both a C compiler (gcc) and the CUDA headers.
+#
+# Layer ordering is deliberate: heavy, rarely-changing layers (torch, base
+# packages, user setup) come first; the application code is the very last
+# layer. A code-only change (the common case for releases) re-pushes only
+# the small app layer instead of the ~3.5 GB torch layer.
 FROM nvidia/cuda:12.8.1-cudnn-devel-ubuntu22.04 AS base
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -16,6 +21,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     CC=gcc \
     CXX=g++
 
+# --- Layer 1: OS packages + Python 3.12 + pip. Invalidated only when this
+# RUN block itself changes.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         software-properties-common curl git ca-certificates gosu \
@@ -30,21 +37,28 @@ RUN apt-get update \
     && python -m ensurepip --upgrade \
     && python -m pip install --upgrade pip
 
-WORKDIR /app
+# --- Layer 2: torch + cu128 wheels (~3.5 GB). Invalidated only when this
+# RUN line changes (torch version bump or CUDA base bump).
+RUN python -m pip install --index-url https://download.pytorch.org/whl/cu128 "torch>=2.7"
 
-COPY pyproject.toml README.md LICENSE ./
-COPY src ./src
-
-# torch>=2.7 with cu128 wheels is required for Blackwell sm_120 support.
-RUN python -m pip install --index-url https://download.pytorch.org/whl/cu128 "torch>=2.7" \
-    && python -m pip install .
-
+# --- Layer 3: unprivileged user + cache dir + entrypoint script. Invalidated
+# only when the entrypoint script changes (very rare).
 RUN useradd --create-home --uid 1000 opf \
     && mkdir -p /home/opf/.opf \
     && chown -R opf:opf /home/opf
-
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
+# --- Layer 4: pip-installable project metadata. Invalidated when
+# pyproject.toml / README / LICENSE change. Small (~kB).
+WORKDIR /app
+COPY pyproject.toml README.md LICENSE ./
+
+# --- Layer 5: application source + pip install of the project itself.
+# This is the only layer that re-pushes on a typical code-change release;
+# it should be a few MB at most.
+COPY src ./src
+RUN python -m pip install .
 
 WORKDIR /home/opf
 
