@@ -110,6 +110,25 @@ def test_openai_chat_503_when_engine_not_ready(fake_engine, client):
     assert resp.status_code == 503
 
 
+def test_openai_chat_filters_short_detections(client, fake_engine):
+    from opf_api.engine import DetectedSpan
+
+    user_text = "Short detections like A and BC should drop"
+    scan_input = f"[user] {user_text}"
+    fake_engine._spans_by_input[scan_input] = [
+        DetectedSpan(text="A", category="private_person"),
+        DetectedSpan(text="BC", category="private_person"),
+        DetectedSpan(text="Alice", category="private_person"),
+    ]
+    resp = client.post(
+        "/v1/chat/completions",
+        json=_openai_request([{"role": "user", "content": user_text}]),
+    )
+    assert resp.status_code == 200
+    detections = _detections(resp.json())
+    assert [d["text"] for d in detections] == ["Alice"]
+
+
 def test_openai_chat_alias_without_v1_prefix(client):
     # Some clients hit /chat/completions without the v1 prefix; serve
     # both paths from the same handler.

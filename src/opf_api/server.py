@@ -36,6 +36,12 @@ from .preprocess import normalize_whitespace
 
 logger = logging.getLogger(__name__)
 
+# Drop detections this short before returning them. The model occasionally
+# emits 1-2 char spans (a stray initial, a single digit) that are almost
+# always false positives — they don't carry enough signal to anonymize on
+# and inflate the detection list downstream.
+MIN_DETECTION_LEN = 3
+
 
 def _iso_now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="microseconds").replace("+00:00", "Z")
@@ -259,6 +265,7 @@ def create_app(
                 "source_category": s.category,
             }
             for s in spans
+            if len(s.text) >= MIN_DETECTION_LEN
         ]
         content = json.dumps({"detections": detections}, ensure_ascii=False)
 
@@ -318,6 +325,7 @@ def create_app(
                 "source_category": s.category,
             }
             for s in spans
+            if len(s.text) >= MIN_DETECTION_LEN
         ]
         content = json.dumps({"detections": detections}, ensure_ascii=False)
 
