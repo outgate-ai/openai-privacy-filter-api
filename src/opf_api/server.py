@@ -69,11 +69,8 @@ def _flatten_openai_content(content: Any) -> str:
         for part in content:
             if isinstance(part, str):
                 parts.append(part)
-            elif isinstance(part, dict):
-                if part.get("type") == "text" and isinstance(part.get("text"), str):
-                    parts.append(part["text"])
-                elif isinstance(part.get("text"), str):
-                    parts.append(part["text"])
+            elif isinstance(part, dict) and isinstance(part.get("text"), str):
+                parts.append(part["text"])
         return "\n".join(p for p in parts if p)
     return str(content)
 
