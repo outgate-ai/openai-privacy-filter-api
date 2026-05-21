@@ -62,3 +62,49 @@ class TagsResponse(BaseModel):
 
 class VersionResponse(BaseModel):
     version: str
+
+
+# ─── OpenAI Chat Completions wire format ─────────────────────────────
+# Mirrors POST /v1/chat/completions enough for guardrail's openai-mode
+# LLM client to consume this server as a drop-in detection backend.
+
+class OpenAIChatMessage(BaseModel):
+    role: str
+    # OpenAI allows string OR a list of content parts. We accept both
+    # and flatten to text inside the handler.
+    content: Any
+
+
+class OpenAIChatRequest(BaseModel):
+    model: str
+    messages: list[OpenAIChatMessage]
+    stream: bool = False
+    temperature: float | None = None
+    max_tokens: int | None = None
+    max_completion_tokens: int | None = None
+
+
+class OpenAIChoiceMessage(BaseModel):
+    role: str = "assistant"
+    content: str
+
+
+class OpenAIChoice(BaseModel):
+    index: int = 0
+    message: OpenAIChoiceMessage
+    finish_reason: str = "stop"
+
+
+class OpenAIUsage(BaseModel):
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    total_tokens: int = 0
+
+
+class OpenAIChatResponse(BaseModel):
+    id: str
+    object: str = "chat.completion"
+    created: int
+    model: str
+    choices: list[OpenAIChoice]
+    usage: OpenAIUsage = Field(default_factory=OpenAIUsage)

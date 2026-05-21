@@ -10,6 +10,7 @@ import uuid
 from collections.abc import Iterable
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
+from typing import Any
 
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
@@ -22,6 +23,11 @@ from .models import (
     ChatRequest,
     ChatResponse,
     ChatResponseMessage,
+    OpenAIChatRequest,
+    OpenAIChatResponse,
+    OpenAIChoice,
+    OpenAIChoiceMessage,
+    OpenAIUsage,
     TagModel,
     TagsResponse,
     VersionResponse,
@@ -40,6 +46,46 @@ def _extract_last_user_content(messages: Iterable[ChatMessage]) -> str | None:
         if msg.role == "user":
             return msg.content
     return None
+
+
+def _flatten_openai_content(content: Any) -> str:
+    """Reduce an OpenAI message content (str or list of parts) to text.
+
+    Every part that carries text contributes; non-text parts (image_url,
+    audio, etc.) are dropped because the redactor only understands text.
+    """
+    if content is None:
+        return ""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts: list[str] = []
+        for part in content:
+            if isinstance(part, str):
+                parts.append(part)
+            elif isinstance(part, dict):
+                if part.get("type") == "text" and isinstance(part.get("text"), str):
+                    parts.append(part["text"])
+                elif isinstance(part.get("text"), str):
+                    parts.append(part["text"])
+        return "\n".join(p for p in parts if p)
+    return str(content)
+
+
+def _join_openai_messages_for_scan(messages: Iterable[Any]) -> str:
+    """Concatenate every message in role-tagged form so the redactor
+    sees the whole conversation, not just the last user turn. Same
+    `[role] text` shape guardrail's regional service uses, so detection
+    outputs are interchangeable across providers.
+    """
+    chunks: list[str] = []
+    for msg in messages:
+        role = getattr(msg, "role", None) or (msg.get("role") if isinstance(msg, dict) else None) or "unknown"
+        raw = getattr(msg, "content", None) if not isinstance(msg, dict) else msg.get("content")
+        text = _flatten_openai_content(raw)
+        if text:
+            chunks.append(f"[{role}] {text}")
+    return "\n".join(chunks)
 
 
 def _extract_presented_token(request: Request) -> str | None:
@@ -225,6 +271,72 @@ def create_app(
             total_duration=total_duration,
             prompt_eval_count=len(last_user),
             eval_count=0,
+        )
+        return JSONResponse(content=response.model_dump())
+
+    @app.post("/v1/chat/completions", dependencies=[Depends(require_auth)])
+    @app.post("/chat/completions", dependencies=[Depends(require_auth)])
+    async def openai_chat_completions(req: OpenAIChatRequest):
+        if req.stream:
+            raise HTTPException(status_code=400, detail="stream=true is not supported")
+        if not req.model or req.model != model_name:
+            raise HTTPException(
+                status_code=404,
+                detail=(
+                    f"model {req.model!r} not found, "
+                    f"this server only serves {model_name!r}"
+                ),
+            )
+        if engine.state != "ready":
+            raise HTTPException(
+                status_code=503, detail=f"engine not ready (state={engine.state})"
+            )
+
+        # Sanitize every message in the request, not just the last user
+        # turn. System prompts often carry credentials; assistant +
+        # tool messages carry agent-crafted parameters and tool
+        # outputs — all worth scanning.
+        scan_input = _join_openai_messages_for_scan(req.messages)
+        if not scan_input:
+            raise HTTPException(status_code=400, detail="no text content found in request")
+
+        if normalize_whitespace_input:
+            scan_input = normalize_whitespace(scan_input)
+
+        try:
+            spans = engine.redact(scan_input)
+        except Exception as exc:
+            logger.exception("redaction failed")
+            raise HTTPException(
+                status_code=500, detail="internal error during redaction"
+            ) from exc
+
+        detections = [
+            {
+                "text": s.text,
+                "category": map_category(s.category),
+                "source_category": s.category,
+            }
+            for s in spans
+        ]
+        content = json.dumps({"detections": detections}, ensure_ascii=False)
+
+        response = OpenAIChatResponse(
+            id=f"chatcmpl-{uuid.uuid4().hex}",
+            created=int(time.time()),
+            model=model_name,
+            choices=[
+                OpenAIChoice(
+                    index=0,
+                    message=OpenAIChoiceMessage(role="assistant", content=content),
+                    finish_reason="stop",
+                )
+            ],
+            usage=OpenAIUsage(
+                prompt_tokens=len(scan_input),
+                completion_tokens=0,
+                total_tokens=len(scan_input),
+            ),
         )
         return JSONResponse(content=response.model_dump())
 
