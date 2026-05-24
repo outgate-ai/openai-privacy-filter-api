@@ -65,7 +65,6 @@ def test_chat_empty_results_returns_empty_detections(client, parsed_content):
     resp = client.post("/api/chat", json=_chat_request("Nothing sensitive here."))
     assert resp.status_code == 200
     assert parsed_content(resp.json()) == []
-    # Verify the wrapped shape is present even when empty.
     import json as _json
     body = resp.json()
     assert _json.loads(body["message"]["content"]) == {"detections": []}
@@ -173,7 +172,6 @@ def test_chat_normalizes_whitespace_by_default(client, fake_engine):
         json=_chat_request("Contact i@izs.me\nand\n\nAlice."),
     )
     assert resp.status_code == 200
-    # The engine sees a flattened single-line input, not the original newlines.
     assert fake_engine.redact_calls[-1] == "Contact i@izs.me and Alice."
 
 

@@ -64,10 +64,6 @@ class VersionResponse(BaseModel):
     version: str
 
 
-# ─── OpenAI Chat Completions wire format ─────────────────────────────
-# Mirrors POST /v1/chat/completions enough for guardrail's openai-mode
-# LLM client to consume this server as a drop-in detection backend.
-
 class OpenAIChatMessage(BaseModel):
     role: str
     # OpenAI allows string OR a list of content parts. We accept both

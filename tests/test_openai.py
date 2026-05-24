@@ -28,7 +28,6 @@ def test_openai_chat_envelope_shape(client):
     assert len(body["choices"]) == 1
     assert body["choices"][0]["message"]["role"] == "assistant"
     assert body["choices"][0]["finish_reason"] == "stop"
-    # Wrapped detections payload, even when empty.
     assert _detections(body) == []
 
 
@@ -42,8 +41,6 @@ def test_openai_chat_scans_every_message_not_only_last_user(client, fake_engine)
     )
     resp = client.post("/v1/chat/completions", json=payload)
     assert resp.status_code == 200
-    # The redactor saw the system + user + assistant content joined,
-    # not just the last user turn.
     seen = fake_engine.redact_calls[-1]
     assert "sk-abc" in seen
     assert "[system]" in seen
@@ -64,7 +61,6 @@ def test_openai_chat_handles_array_content_parts(client, fake_engine):
     )
     resp = client.post("/v1/chat/completions", json=payload)
     assert resp.status_code == 200
-    # Only the text part reached the redactor; the image_url was dropped.
     seen = fake_engine.redact_calls[-1]
     assert "Alice" in seen
     assert "zzz" not in seen
@@ -130,8 +126,6 @@ def test_openai_chat_filters_short_detections(client, fake_engine):
 
 
 def test_openai_chat_alias_without_v1_prefix(client):
-    # Some clients hit /chat/completions without the v1 prefix; serve
-    # both paths from the same handler.
     resp = client.post(
         "/chat/completions",
         json=_openai_request([{"role": "user", "content": "Nothing sensitive here."}]),

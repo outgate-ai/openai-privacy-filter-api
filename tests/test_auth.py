@@ -85,6 +85,5 @@ def test_bearer_prefix_case_insensitive(auth_client):
 
 
 def test_no_token_configured_means_open(client):
-    # `client` fixture has no auth_token — any request (no header) should work.
     resp = client.get("/api/tags")
     assert resp.status_code == 200
