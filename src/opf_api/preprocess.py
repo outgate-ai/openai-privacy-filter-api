@@ -16,12 +16,9 @@ from __future__ import annotations
 
 import re
 
-# Match real whitespace runs (≥1 char): regular space, tab, CR, LF, NBSP,
-# zero-width space, and the rest of Unicode whitespace.
 _WHITESPACE_RUN = re.compile(r"\s+")
 
-# Match literal two-char escape sequences that arrive when content was
-# double-encoded as JSON: ``\\n`` is the two characters \\ and n.
+# Literal escapes from double-encoded JSON: ``\\n`` is the two characters \\ and n.
 _LITERAL_ESCAPE = re.compile(r"\\[nrt]")
 
 

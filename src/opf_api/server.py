@@ -36,10 +36,7 @@ from .preprocess import normalize_whitespace
 
 logger = logging.getLogger(__name__)
 
-# Drop detections this short before returning them. The model occasionally
-# emits 1-2 char spans (a stray initial, a single digit) that are almost
-# always false positives — they don't carry enough signal to anonymize on
-# and inflate the detection list downstream.
+# 1-2 char spans (a stray initial, a single digit) are almost always false positives.
 MIN_DETECTION_LEN = 3
 
 
@@ -296,10 +293,8 @@ def create_app(
                 status_code=503, detail=f"engine not ready (state={engine.state})"
             )
 
-        # Sanitize every message in the request, not just the last user
-        # turn. System prompts often carry credentials; assistant +
-        # tool messages carry agent-crafted parameters and tool
-        # outputs — all worth scanning.
+        # Every message, not just the last user turn: system prompts carry
+        # credentials, tool messages carry agent-crafted parameters.
         scan_input = _join_openai_messages_for_scan(req.messages)
         if not scan_input:
             raise HTTPException(status_code=400, detail="no text content found in request")

@@ -66,8 +66,7 @@ class VersionResponse(BaseModel):
 
 class OpenAIChatMessage(BaseModel):
     role: str
-    # OpenAI allows string OR a list of content parts. We accept both
-    # and flatten to text inside the handler.
+    # str or a list of content parts; flattened in the handler.
     content: Any
 
 

@@ -17,11 +17,8 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-# Default fallback when an OPF label is unknown (e.g. a future model adds
-# a category we don't yet know about). 'personal_information' is the
-# safest default because it triggers the same anonymization path as the
-# other PII labels, and a missed credential would be more costly than a
-# missed PII span treated as PII.
+# Fail safe: unknown labels must land on a category that still triggers
+# anonymization downstream.
 DEFAULT_GUARDRAIL_CATEGORY = "personal_information"
 
 OPF_TO_GUARDRAIL: dict[str, str] = {
