@@ -18,6 +18,7 @@ from fastapi.responses import JSONResponse
 from . import MODEL_NAME_DEFAULT, __version__
 from .categories import map_category
 from .engine import Engine, OPFEngine
+from .merge import SOURCE_OPF, SOURCE_PRESIDIO, MergedDetection, merge_detections
 from .models import (
     ChatMessage,
     ChatRequest,
@@ -33,6 +34,7 @@ from .models import (
     VersionResponse,
 )
 from .preprocess import normalize_whitespace
+from .presidio import DEFAULT_ENTITIES, PresidioClient, map_entity
 
 logger = logging.getLogger(__name__)
 
@@ -130,6 +132,7 @@ def _make_auth_dependency(expected_token: str | None):
 def create_app(
     *,
     engine: Engine | None = None,
+    presidio_client: PresidioClient | None = None,
     device: str = "cuda",
     model_path: str | None = None,
     model_name: str = MODEL_NAME_DEFAULT,
@@ -139,12 +142,29 @@ def create_app(
     viterbi_calibration_path: str | None = None,
     auth_token: str | None = None,
     normalize_whitespace_input: bool = True,
+    presidio_enabled: bool = False,
+    presidio_url: str = "http://presidio:3000",
+    presidio_language: str = "en",
+    presidio_score_threshold: float = 0.5,
+    presidio_entities: tuple[str, ...] | None = DEFAULT_ENTITIES,
+    presidio_timeout_ms: int = 3000,
+    presidio_fail_open: bool = True,
 ) -> FastAPI:
     """Build the FastAPI app.
 
     If ``engine`` is provided it is used as-is (tests inject a fake). Otherwise
     an ``OPFEngine`` is constructed and loaded in the lifespan startup hook.
     """
+    owned_presidio = presidio_client is None and presidio_enabled
+    if owned_presidio:
+        presidio_client = PresidioClient(
+            url=presidio_url,
+            language=presidio_language,
+            score_threshold=presidio_score_threshold,
+            entities=presidio_entities,
+            timeout_ms=presidio_timeout_ms,
+        )
+
     owned_engine = engine is None
     if engine is None:
         engine = OPFEngine(  # type: ignore[arg-type]
@@ -160,7 +180,11 @@ def create_app(
     async def lifespan(_: FastAPI):
         if owned_engine:
             engine.load()
-        yield
+        try:
+            yield
+        finally:
+            if owned_presidio and presidio_client is not None:
+                await presidio_client.aclose()
 
     app = FastAPI(
         title="OpenAI Privacy Filter API",
@@ -169,7 +193,66 @@ def create_app(
         lifespan=lifespan,
     )
 
+    async def _detect(text: str, request_id: str) -> list[dict[str, str]]:
+        """Run OPF, optionally add a Presidio pass, and merge the two.
+
+        With the Presidio pass off the response stays exactly what it was
+        before the pass existed: OPF order, no ``source`` field.
+        """
+        if presidio_client is None:
+            return [
+                {
+                    "text": span.text,
+                    "category": map_category(span.category),
+                    "source_category": span.category,
+                }
+                for span in engine.redact(text)
+                if len(span.text) >= MIN_DETECTION_LEN
+            ]
+
+        detections = [
+            MergedDetection(
+                text=span.text,
+                category=map_category(span.category),
+                source_category=span.category,
+                source=SOURCE_OPF,
+            )
+            for span in engine.redact(text)
+        ]
+
+        try:
+            presidio_spans = await presidio_client.analyze(text)
+        except Exception as exc:
+            # Presidio is the secondary detector: by default a failure
+            # degrades to OPF-only rather than dropping the whole scan.
+            logger.warning("presidio analyze failed rid=%s error=%s", request_id, exc)
+            if not presidio_fail_open:
+                raise HTTPException(
+                    status_code=503, detail="presidio analyzer unavailable"
+                ) from exc
+        else:
+            detections.extend(
+                MergedDetection(
+                    text=span.text,
+                    category=map_entity(span.entity_type),
+                    source_category=span.entity_type,
+                    source=SOURCE_PRESIDIO,
+                )
+                for span in presidio_spans
+            )
+
+        return [d.as_dict() for d in merge_detections(detections, min_length=MIN_DETECTION_LEN)]
+
     require_auth = _make_auth_dependency(auth_token)
+    if presidio_client is not None:
+        logger.info(
+            "presidio pass enabled (url=%s, entities=%s, score>=%.2f, fail_open=%s)",
+            presidio_url,
+            "*" if presidio_entities is None else ",".join(presidio_entities),
+            presidio_score_threshold,
+            presidio_fail_open,
+        )
+
     if auth_token:
         logger.info("authentication enabled on /api/* endpoints")
     else:
@@ -217,7 +300,7 @@ def create_app(
         )
 
     @app.post("/api/chat", dependencies=[Depends(require_auth)])
-    async def api_chat(req: ChatRequest):
+    async def api_chat(req: ChatRequest, request: Request):
         if req.stream:
             raise HTTPException(status_code=400, detail="stream=true is not supported")
 
@@ -244,7 +327,9 @@ def create_app(
 
         t0 = time.perf_counter_ns()
         try:
-            spans = engine.redact(last_user)
+            detections = await _detect(last_user, getattr(request.state, "request_id", "?"))
+        except HTTPException:
+            raise
         except Exception as exc:
             logger.exception("redaction failed")
             raise HTTPException(
@@ -252,15 +337,6 @@ def create_app(
             ) from exc
         total_duration = time.perf_counter_ns() - t0
 
-        detections = [
-            {
-                "text": s.text,
-                "category": map_category(s.category),
-                "source_category": s.category,
-            }
-            for s in spans
-            if len(s.text) >= MIN_DETECTION_LEN
-        ]
         content = json.dumps({"detections": detections}, ensure_ascii=False)
 
         response = ChatResponse(
@@ -277,7 +353,7 @@ def create_app(
 
     @app.post("/v1/chat/completions", dependencies=[Depends(require_auth)])
     @app.post("/chat/completions", dependencies=[Depends(require_auth)])
-    async def openai_chat_completions(req: OpenAIChatRequest):
+    async def openai_chat_completions(req: OpenAIChatRequest, request: Request):
         if req.stream:
             raise HTTPException(status_code=400, detail="stream=true is not supported")
         if not req.model or req.model != model_name:
@@ -303,22 +379,15 @@ def create_app(
             scan_input = normalize_whitespace(scan_input)
 
         try:
-            spans = engine.redact(scan_input)
+            detections = await _detect(scan_input, getattr(request.state, "request_id", "?"))
+        except HTTPException:
+            raise
         except Exception as exc:
             logger.exception("redaction failed")
             raise HTTPException(
                 status_code=500, detail="internal error during redaction"
             ) from exc
 
-        detections = [
-            {
-                "text": s.text,
-                "category": map_category(s.category),
-                "source_category": s.category,
-            }
-            for s in spans
-            if len(s.text) >= MIN_DETECTION_LEN
-        ]
         content = json.dumps({"detections": detections}, ensure_ascii=False)
 
         response = OpenAIChatResponse(

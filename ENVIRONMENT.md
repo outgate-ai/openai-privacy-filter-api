@@ -25,6 +25,34 @@
 |----------|---------|-------------|
 | `OPF_API_AUTH_TOKEN` | unset (auth disabled) | Shared secret required by all `/api/*` endpoints when set. Clients must send `Authorization: Bearer <token>` or `X-API-Key: <token>`. Requests without a valid token return HTTP 401 with `WWW-Authenticate: Bearer`. `/health` is always open so orchestrators can probe readiness without credentials. Token comparison uses `hmac.compare_digest` (constant-time). Failed attempts are logged at `warning` with the client IP and request ID. |
 
+## Presidio pass (optional second detector)
+
+OPF finds whole spans — a connection string with the password inside it, a signature block with the name and the phone — where pattern matchers return only the fragment they recognise. Presidio adds deterministic, checksum-backed recognizers (IBAN mod-97, card Luhn, SSN) that do not vary with the model's mood. With the pass enabled both run on every request and their detections are merged: when two spans describe the same value, the longer one is kept and the shorter folds into it, contributing only its provenance (`source` becomes `opf+presidio`). Nothing is ever dropped because the other detector missed it.
+
+The pass needs a reachable [Presidio analyzer](https://microsoft.github.io/presidio/) (`ghcr.io/data-privacy-stack/presidio-analyzer`).
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `OPF_API_PRESIDIO_ENABLED` | `false` | Master switch. When `false` the response is byte-for-byte what it was before this feature existed (no `source` field, OPF order). |
+| `OPF_API_PRESIDIO_URL` | `http://presidio:3000` | Base URL of the analyzer; the server posts to `<url>/analyze`. |
+| `OPF_API_PRESIDIO_LANGUAGE` | `en` | Language code passed to the analyzer. The analyzer must have a model for it. |
+| `OPF_API_PRESIDIO_SCORE_THRESHOLD` | `0.5` | Results below this confidence are discarded by the analyzer. |
+| `OPF_API_PRESIDIO_ENTITIES` | see below | Comma-separated entity allowlist, or `*` for every entity the analyzer supports. |
+| `OPF_API_PRESIDIO_TIMEOUT_MS` | `3000` | Per-request timeout for the analyzer call. |
+| `OPF_API_PRESIDIO_FAIL_OPEN` | `true` | `true`: an analyzer error logs a warning and the scan degrades to OPF-only. `false`: the request fails with HTTP 503. |
+
+The default allowlist is the set of recognizers that hold up on ordinary engineering prose:
+
+```
+CREDIT_CARD, CRYPTO, EMAIL_ADDRESS, IBAN_CODE, IP_ADDRESS, MAC_ADDRESS,
+MEDICAL_LICENSE, PHONE_NUMBER, UK_NHS, US_BANK_NUMBER, US_DRIVER_LICENSE,
+US_ITIN, US_PASSPORT, US_SSN
+```
+
+`PERSON`, `LOCATION`, `NRP`, `DATE_TIME` and `URL` are deliberately left out: OPF already covers people and addresses, and on normal text those recognizers fire on "Thursday", "Hamburg" and every `https://` link. Add them explicitly if you want them.
+
+Each detection carries `source` (`opf`, `presidio`, or `opf+presidio`) and `source_category` — the native OPF label or the Presidio entity type — so you can tell the detectors apart downstream.
+
 ## Model-behavior variables
 
 These control what the model outputs and how long an input it can process.
@@ -83,6 +111,15 @@ Docker (CPU):
 docker run --rm -p 11435:11435 \
   -v "$HOME/.opf:/home/opf/.opf" \
   ghcr.io/outgate-ai/openai-privacy-filter-api:latest
+```
+
+With the Presidio pass (compose sketch — analyzer on the same network):
+
+```bash
+docker run --rm --gpus all -p 11435:11435 \
+  -e OPF_API_PRESIDIO_ENABLED=true \
+  -e OPF_API_PRESIDIO_URL=http://presidio:3000 \
+  ghcr.io/outgate-ai/openai-privacy-filter-api:latest-cuda
 ```
 
 Docker (CUDA):

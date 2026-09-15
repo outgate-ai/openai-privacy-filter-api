@@ -94,6 +94,25 @@ Response:
 
 Unknown OPF labels (forward-compat, in case the upstream model adds new categories) fall back to `personal_information` and emit a warning log.
 
+### Optional Presidio pass
+
+Set `OPF_API_PRESIDIO_ENABLED=true` (and `OPF_API_PRESIDIO_URL`) to run a [Presidio analyzer](https://microsoft.github.io/presidio/) pass on the same text and merge its findings with OPF's. OPF stays primary — it returns whole spans where pattern matchers return fragments — and Presidio adds checksum-backed recognizers (IBAN mod-97, card Luhn, SSN) that do not depend on model behaviour.
+
+Merge rule: when two detections describe the same value, **the longer span wins** and the shorter one folds into it; on an exact tie OPF's category is kept. So a Presidio `URL` hit on `db.internal` inside OPF's full `postgres://svc:…@db.internal:5432/ledger` yields one detection — the connection string — marked as seen by both.
+
+With the pass on, each detection gains a `source` field:
+
+```json
+{
+  "detections": [
+    {"text": "postgres://svc:hunter2@db.internal:5432/ledger", "category": "credentials", "source_category": "secret", "source": "opf+presidio"},
+    {"text": "DE89370400440532013000", "category": "personal_information", "source_category": "IBAN_CODE", "source": "presidio"}
+  ]
+}
+```
+
+With the pass off (the default), the response shape is unchanged — no `source` field. Entity allowlist, score threshold, timeout and fail-open behaviour are documented in [ENVIRONMENT.md](ENVIRONMENT.md).
+
 ### Other endpoints
 
 | Endpoint | Purpose |
@@ -136,6 +155,13 @@ All settings are available as CLI flags and environment variables. **CLI > env >
 | `--viterbi-calibration-path` | `OPF_API_VITERBI_CALIBRATION_PATH` | unset |
 | `--auth-token` | `OPF_API_AUTH_TOKEN` | unset (open) |
 | `--normalize-whitespace` / `--no-normalize-whitespace` | `OPF_API_NORMALIZE_WHITESPACE` | `true` |
+| `--presidio` / `--no-presidio` | `OPF_API_PRESIDIO_ENABLED` | `false` |
+| `--presidio-url` | `OPF_API_PRESIDIO_URL` | `http://presidio:3000` |
+| `--presidio-language` | `OPF_API_PRESIDIO_LANGUAGE` | `en` |
+| `--presidio-score-threshold` | `OPF_API_PRESIDIO_SCORE_THRESHOLD` | `0.5` |
+| `--presidio-entities` | `OPF_API_PRESIDIO_ENTITIES` | high-precision set (see ENVIRONMENT.md) |
+| `--presidio-timeout-ms` | `OPF_API_PRESIDIO_TIMEOUT_MS` | `3000` |
+| `--presidio-fail-open` / `--presidio-fail-closed` | `OPF_API_PRESIDIO_FAIL_OPEN` | `true` |
 
 OPF's recall on multi-line input (emails, OCR'd PDFs, address blocks) improves substantially when newlines/tabs are flattened to single spaces, so the server does this by default. The flattening also defensively decodes literal `\n` / `\r` / `\t` escape sequences that arrive when clients double-encode their JSON body. Disable with `OPF_API_NORMALIZE_WHITESPACE=false` if you need raw input passthrough.
 

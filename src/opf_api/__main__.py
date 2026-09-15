@@ -16,6 +16,16 @@ from .config import Config
 from .server import create_app
 
 
+def _parse_entities(value: str | None) -> tuple[str, ...] | None:
+    """CLI counterpart of OPF_API_PRESIDIO_ENTITIES. ``None`` leaves the
+    configured value alone; ``*`` means every supported entity."""
+    if value is None:
+        return None
+    if value.strip() == "*":
+        return ()
+    return tuple(item.strip().upper() for item in value.split(",") if item.strip())
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="opf-api",
@@ -91,6 +101,67 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help="Pass content to the model unchanged (env: OPF_API_NORMALIZE_WHITESPACE=false).",
     )
+    presidio_group = parser.add_mutually_exclusive_group()
+    presidio_group.add_argument(
+        "--presidio",
+        dest="presidio_enabled",
+        action="store_true",
+        default=None,
+        help="Run a Presidio analyzer pass alongside OPF and merge the detections "
+        "(env: OPF_API_PRESIDIO_ENABLED=true). Off by default.",
+    )
+    presidio_group.add_argument(
+        "--no-presidio",
+        dest="presidio_enabled",
+        action="store_false",
+        default=None,
+        help="OPF only (env: OPF_API_PRESIDIO_ENABLED=false).",
+    )
+    parser.add_argument(
+        "--presidio-url",
+        default=None,
+        help="Base URL of the Presidio analyzer (env: OPF_API_PRESIDIO_URL)",
+    )
+    parser.add_argument(
+        "--presidio-language",
+        default=None,
+        help="Language code passed to the analyzer (env: OPF_API_PRESIDIO_LANGUAGE)",
+    )
+    parser.add_argument(
+        "--presidio-score-threshold",
+        type=float,
+        default=None,
+        help="Drop analyzer results below this confidence (env: OPF_API_PRESIDIO_SCORE_THRESHOLD)",
+    )
+    parser.add_argument(
+        "--presidio-entities",
+        default=None,
+        help="Comma-separated entity allowlist, or * for every supported entity "
+        "(env: OPF_API_PRESIDIO_ENTITIES)",
+    )
+    parser.add_argument(
+        "--presidio-timeout-ms",
+        type=int,
+        default=None,
+        help="Per-request analyzer timeout in milliseconds (env: OPF_API_PRESIDIO_TIMEOUT_MS)",
+    )
+    presidio_fail_group = parser.add_mutually_exclusive_group()
+    presidio_fail_group.add_argument(
+        "--presidio-fail-open",
+        dest="presidio_fail_open",
+        action="store_true",
+        default=None,
+        help="An analyzer error degrades the scan to OPF-only. Default on. "
+        "(env: OPF_API_PRESIDIO_FAIL_OPEN=true)",
+    )
+    presidio_fail_group.add_argument(
+        "--presidio-fail-closed",
+        dest="presidio_fail_open",
+        action="store_false",
+        default=None,
+        help="An analyzer error fails the request with 503 "
+        "(env: OPF_API_PRESIDIO_FAIL_OPEN=false).",
+    )
     args = parser.parse_args(argv)
 
     cfg = Config.from_env().override(
@@ -106,6 +177,13 @@ def main(argv: list[str] | None = None) -> int:
         viterbi_calibration_path=args.viterbi_calibration_path,
         auth_token=args.auth_token,
         normalize_whitespace=args.normalize_whitespace,
+        presidio_enabled=args.presidio_enabled,
+        presidio_url=args.presidio_url,
+        presidio_language=args.presidio_language,
+        presidio_score_threshold=args.presidio_score_threshold,
+        presidio_entities=_parse_entities(args.presidio_entities),
+        presidio_timeout_ms=args.presidio_timeout_ms,
+        presidio_fail_open=args.presidio_fail_open,
     )
 
     logging.basicConfig(
@@ -123,6 +201,13 @@ def main(argv: list[str] | None = None) -> int:
         viterbi_calibration_path=cfg.viterbi_calibration_path,
         auth_token=cfg.auth_token,
         normalize_whitespace_input=cfg.normalize_whitespace,
+        presidio_enabled=cfg.presidio_enabled,
+        presidio_url=cfg.presidio_url,
+        presidio_language=cfg.presidio_language,
+        presidio_score_threshold=cfg.presidio_score_threshold,
+        presidio_entities=cfg.presidio_entities,
+        presidio_timeout_ms=cfg.presidio_timeout_ms,
+        presidio_fail_open=cfg.presidio_fail_open,
     )
     uvicorn.run(app, host=cfg.host, port=cfg.port, log_level=cfg.log_level)
     return 0

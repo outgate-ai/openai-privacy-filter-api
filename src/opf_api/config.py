@@ -7,9 +7,13 @@ from dataclasses import dataclass
 from typing import Literal
 
 from . import MODEL_NAME_DEFAULT
+from .presidio import DEFAULT_ENTITIES
 
 CONTEXT_WINDOW_LENGTH_MAX = 131072
 CONTEXT_WINDOW_LENGTH_DEFAULT = CONTEXT_WINDOW_LENGTH_MAX
+
+PRESIDIO_URL_DEFAULT = "http://presidio:3000"
+PRESIDIO_SCORE_THRESHOLD_DEFAULT = 0.5
 
 OUTPUT_MODES = ("typed", "redacted")
 DECODE_MODES = ("viterbi", "argmax")
@@ -48,6 +52,26 @@ def _env_bool(key: str, default: bool) -> bool:
     )
 
 
+def _env_float(key: str, default: float) -> float:
+    value = os.environ.get(key)
+    if value is None or value == "":
+        return default
+    try:
+        return float(value)
+    except ValueError as exc:
+        raise ValueError(f"env var {key} must be a number (got {value!r})") from exc
+
+
+def _env_entities(key: str, default: tuple[str, ...]) -> tuple[str, ...] | None:
+    """Comma-separated entity allowlist. ``*`` means every supported entity."""
+    value = os.environ.get(key)
+    if value is None or value == "":
+        return default
+    if value.strip() == "*":
+        return None
+    return tuple(item.strip().upper() for item in value.split(",") if item.strip())
+
+
 def _env_choice(key: str, choices: tuple[str, ...], default: str) -> str:
     value = os.environ.get(key)
     if value is None or value == "":
@@ -73,6 +97,13 @@ class Config:
     viterbi_calibration_path: str | None
     auth_token: str | None
     normalize_whitespace: bool
+    presidio_enabled: bool
+    presidio_url: str
+    presidio_language: str
+    presidio_score_threshold: float
+    presidio_entities: tuple[str, ...] | None
+    presidio_timeout_ms: int
+    presidio_fail_open: bool
 
     @classmethod
     def from_env(cls) -> Config:
@@ -100,6 +131,15 @@ class Config:
             normalize_whitespace=_env_bool(
                 "OPF_API_NORMALIZE_WHITESPACE", default=True
             ),
+            presidio_enabled=_env_bool("OPF_API_PRESIDIO_ENABLED", default=False),
+            presidio_url=_env_str("OPF_API_PRESIDIO_URL", PRESIDIO_URL_DEFAULT),
+            presidio_language=_env_str("OPF_API_PRESIDIO_LANGUAGE", "en"),
+            presidio_score_threshold=_env_float(
+                "OPF_API_PRESIDIO_SCORE_THRESHOLD", PRESIDIO_SCORE_THRESHOLD_DEFAULT
+            ),
+            presidio_entities=_env_entities("OPF_API_PRESIDIO_ENTITIES", DEFAULT_ENTITIES),
+            presidio_timeout_ms=_env_int("OPF_API_PRESIDIO_TIMEOUT_MS", 3000),
+            presidio_fail_open=_env_bool("OPF_API_PRESIDIO_FAIL_OPEN", default=True),
         )
 
     def override(
@@ -117,6 +157,13 @@ class Config:
         viterbi_calibration_path: str | None = None,
         auth_token: str | None = None,
         normalize_whitespace: bool | None = None,
+        presidio_enabled: bool | None = None,
+        presidio_url: str | None = None,
+        presidio_language: str | None = None,
+        presidio_score_threshold: float | None = None,
+        presidio_entities: tuple[str, ...] | None = None,
+        presidio_timeout_ms: int | None = None,
+        presidio_fail_open: bool | None = None,
     ) -> Config:
         if context_window_length is not None:
             _validate_context_window(context_window_length)
@@ -152,6 +199,31 @@ class Config:
                 normalize_whitespace
                 if normalize_whitespace is not None
                 else self.normalize_whitespace
+            ),
+            presidio_enabled=(
+                presidio_enabled if presidio_enabled is not None else self.presidio_enabled
+            ),
+            presidio_url=presidio_url if presidio_url is not None else self.presidio_url,
+            presidio_language=(
+                presidio_language if presidio_language is not None else self.presidio_language
+            ),
+            presidio_score_threshold=(
+                presidio_score_threshold
+                if presidio_score_threshold is not None
+                else self.presidio_score_threshold
+            ),
+            presidio_entities=(
+                presidio_entities if presidio_entities is not None else self.presidio_entities
+            ),
+            presidio_timeout_ms=(
+                presidio_timeout_ms
+                if presidio_timeout_ms is not None
+                else self.presidio_timeout_ms
+            ),
+            presidio_fail_open=(
+                presidio_fail_open
+                if presidio_fail_open is not None
+                else self.presidio_fail_open
             ),
         )
 
