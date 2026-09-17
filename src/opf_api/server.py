@@ -33,6 +33,11 @@ from .models import (
     TagsResponse,
     VersionResponse,
 )
+from .precision import (
+    DEFAULT_NOISY_CATEGORIES,
+    apply_precision_filters,
+    is_bare_word_secret,
+)
 from .preprocess import normalize_whitespace
 from .presidio import DEFAULT_ENTITIES, PresidioClient, map_entity
 
@@ -149,12 +154,16 @@ def create_app(
     presidio_entities: tuple[str, ...] | None = DEFAULT_ENTITIES,
     presidio_timeout_ms: int = 3000,
     presidio_fail_open: bool = True,
+    precision_filters: bool = True,
+    noisy_categories: tuple[str, ...] = DEFAULT_NOISY_CATEGORIES,
 ) -> FastAPI:
     """Build the FastAPI app.
 
     If ``engine`` is provided it is used as-is (tests inject a fake). Otherwise
     an ``OPFEngine`` is constructed and loaded in the lifespan startup hook.
     """
+    noisy_set = frozenset(noisy_categories)
+
     owned_presidio = presidio_client is None and presidio_enabled
     if owned_presidio:
         presidio_client = PresidioClient(
@@ -208,6 +217,11 @@ def create_app(
                 }
                 for span in engine.redact(text)
                 if len(span.text) >= MIN_DETECTION_LEN
+                and not (
+                    precision_filters
+                    and span.category == "secret"
+                    and is_bare_word_secret(span.text)
+                )
             ]
 
         detections = [
@@ -241,7 +255,14 @@ def create_app(
                 for span in presidio_spans
             )
 
-        return [d.as_dict() for d in merge_detections(detections, min_length=MIN_DETECTION_LEN)]
+        merged = merge_detections(detections, min_length=MIN_DETECTION_LEN)
+        if precision_filters:
+            merged = apply_precision_filters(
+                merged,
+                corroboration_available=True,
+                noisy_categories=noisy_set,
+            )
+        return [d.as_dict() for d in merged]
 
     require_auth = _make_auth_dependency(auth_token)
     if presidio_client is not None:

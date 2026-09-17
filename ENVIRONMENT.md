@@ -40,6 +40,8 @@ The pass needs a reachable [Presidio analyzer](https://microsoft.github.io/presi
 | `OPF_API_PRESIDIO_ENTITIES` | see below | Comma-separated entity allowlist, or `*` for every entity the analyzer supports. |
 | `OPF_API_PRESIDIO_TIMEOUT_MS` | `3000` | Per-request timeout for the analyzer call. |
 | `OPF_API_PRESIDIO_FAIL_OPEN` | `true` | `true`: an analyzer error logs a warning and the scan degrades to OPF-only. `false`: the request fails with HTTP 503. |
+| `OPF_API_PRECISION_FILTERS` | `true` | Drops detections whose shape alone does not support the claim. Two rules: a `secret` that is a single all-alphabetic token of 12 characters or fewer is treated as a word, not a credential (a company or product name in a path, a hostname, an image reference); and a hit under a noisy category is dropped when a second detector ran and did not corroborate it. Set to `false` to emit every detection the model produces. |
+| `OPF_API_NOISY_CATEGORIES` | `private_date,account_number` | Comma-separated OPF native categories subject to the corroboration rule above. These fire on machine output — ISO timestamps, invoice numbers, MAC addresses, any long digit run — while the values that matter under them (card, IBAN, SSN) are also matched by Presidio's checksum-backed recognizers. The rule is inactive when the Presidio pass is off, so a single-detector deployment keeps its recall unchanged. |
 
 The default allowlist is the set of recognizers that hold up on ordinary engineering prose:
 

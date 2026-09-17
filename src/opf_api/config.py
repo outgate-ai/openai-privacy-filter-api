@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 from . import MODEL_NAME_DEFAULT
+from .precision import DEFAULT_NOISY_CATEGORIES
 from .presidio import DEFAULT_ENTITIES
 
 CONTEXT_WINDOW_LENGTH_MAX = 131072
@@ -104,6 +105,8 @@ class Config:
     presidio_entities: tuple[str, ...] | None
     presidio_timeout_ms: int
     presidio_fail_open: bool
+    precision_filters: bool
+    noisy_categories: tuple[str, ...]
 
     @classmethod
     def from_env(cls) -> Config:
@@ -140,6 +143,11 @@ class Config:
             presidio_entities=_env_entities("OPF_API_PRESIDIO_ENTITIES", DEFAULT_ENTITIES),
             presidio_timeout_ms=_env_int("OPF_API_PRESIDIO_TIMEOUT_MS", 3000),
             presidio_fail_open=_env_bool("OPF_API_PRESIDIO_FAIL_OPEN", default=True),
+            precision_filters=_env_bool("OPF_API_PRECISION_FILTERS", default=True),
+            noisy_categories=_env_entities(
+                "OPF_API_NOISY_CATEGORIES", DEFAULT_NOISY_CATEGORIES
+            )
+            or (),
         )
 
     def override(
@@ -164,6 +172,8 @@ class Config:
         presidio_entities: tuple[str, ...] | None = None,
         presidio_timeout_ms: int | None = None,
         presidio_fail_open: bool | None = None,
+        precision_filters: bool | None = None,
+        noisy_categories: tuple[str, ...] | None = None,
     ) -> Config:
         if context_window_length is not None:
             _validate_context_window(context_window_length)
@@ -224,6 +234,16 @@ class Config:
                 presidio_fail_open
                 if presidio_fail_open is not None
                 else self.presidio_fail_open
+            ),
+            precision_filters=(
+                precision_filters
+                if precision_filters is not None
+                else self.precision_filters
+            ),
+            noisy_categories=(
+                noisy_categories
+                if noisy_categories is not None
+                else self.noisy_categories
             ),
         )
 

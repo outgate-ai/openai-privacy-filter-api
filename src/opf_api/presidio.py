@@ -26,9 +26,7 @@ DEFAULT_ENTITIES: tuple[str, ...] = (
     "CRYPTO",
     "EMAIL_ADDRESS",
     "IBAN_CODE",
-    "IP_ADDRESS",
     "MAC_ADDRESS",
-    "MEDICAL_LICENSE",
     "PHONE_NUMBER",
     "UK_NHS",
     "US_BANK_NUMBER",
@@ -40,6 +38,10 @@ DEFAULT_ENTITIES: tuple[str, ...] = (
 
 # Presidio entity -> guardrail risk category. Financial identifiers follow
 # OPF's own account_number mapping and land on personal_information.
+# IP_ADDRESS and MEDICAL_LICENSE are deliberately out of DEFAULT_ENTITIES:
+# the first is a technical identifier the guardrail's own detection criteria
+# tell detectors not to flag, and the second is a loose enough pattern to
+# match arbitrary hyphenated identifiers such as a UUID fragment.
 PRESIDIO_TO_GUARDRAIL: dict[str, str] = {
     "CREDIT_CARD": "personal_information",
     "CRYPTO": "personal_information",
