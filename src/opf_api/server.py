@@ -106,6 +106,18 @@ def _extract_presented_token(request: Request) -> str | None:
     return api_key or None
 
 
+def parse_auth_tokens(configured: str | None) -> tuple[str, ...]:
+    """Split OPF_API_AUTH_TOKEN into the accepted tokens.
+
+    A comma-separated value lets one instance serve callers that hold
+    different tokens (two regions sharing a GPU box, for example).
+    Whitespace around each token is ignored; empty segments are dropped.
+    """
+    if not configured:
+        return ()
+    return tuple(t.strip() for t in configured.split(",") if t.strip())
+
+
 def _make_auth_dependency(expected_token: str | None):
     """Build a FastAPI dependency that enforces auth when a token is configured."""
     if not expected_token:
@@ -114,9 +126,19 @@ def _make_auth_dependency(expected_token: str | None):
 
         return _noop
 
+    # A configured but unparsable value (e.g. ",") must not silently
+    # disable auth, so the dependency is installed with no valid token.
+    accepted = parse_auth_tokens(expected_token)
+
+    def _matches(presented: str) -> bool:
+        ok = False
+        for token in accepted:
+            ok = hmac.compare_digest(presented, token) or ok
+        return ok
+
     async def _require_auth(request: Request) -> None:
         presented = _extract_presented_token(request)
-        if presented is None or not hmac.compare_digest(presented, expected_token):
+        if presented is None or not _matches(presented):
             client_host = request.client.host if request.client else "?"
             logger.warning(
                 "auth failed rid=%s ip=%s path=%s reason=%s",
@@ -275,7 +297,10 @@ def create_app(
         )
 
     if auth_token:
-        logger.info("authentication enabled on /api/* endpoints")
+        logger.info(
+            "authentication enabled on /api/* endpoints (%d accepted token(s))",
+            len(parse_auth_tokens(auth_token)),
+        )
     else:
         logger.info("authentication disabled (set OPF_API_AUTH_TOKEN to enable)")
 

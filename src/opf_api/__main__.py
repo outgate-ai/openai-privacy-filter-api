@@ -82,7 +82,8 @@ def main(argv: list[str] | None = None) -> int:
         "--auth-token",
         default=None,
         help="If set, /api/* endpoints require Authorization: Bearer <token> or "
-        "X-API-Key: <token> (env: OPF_API_AUTH_TOKEN). Unset means auth disabled.",
+        "X-API-Key: <token> (env: OPF_API_AUTH_TOKEN). Comma-separate several "
+        "tokens to accept any of them. Unset means auth disabled.",
     )
     norm_group = parser.add_mutually_exclusive_group()
     norm_group.add_argument(

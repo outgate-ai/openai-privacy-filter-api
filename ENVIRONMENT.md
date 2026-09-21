@@ -23,7 +23,7 @@
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `OPF_API_AUTH_TOKEN` | unset (auth disabled) | Shared secret required by all `/api/*` endpoints when set. Clients must send `Authorization: Bearer <token>` or `X-API-Key: <token>`. Requests without a valid token return HTTP 401 with `WWW-Authenticate: Bearer`. `/health` is always open so orchestrators can probe readiness without credentials. Token comparison uses `hmac.compare_digest` (constant-time). Failed attempts are logged at `warning` with the client IP and request ID. |
+| `OPF_API_AUTH_TOKEN` | unset (auth disabled) | Shared secret required by all `/api/*` endpoints when set. Several tokens may be given comma-separated (`tokenA,tokenB`) so one instance can serve callers holding different secrets; any listed token is accepted. Clients must send `Authorization: Bearer <token>` or `X-API-Key: <token>`. Requests without a valid token return HTTP 401 with `WWW-Authenticate: Bearer`. `/health` is always open so orchestrators can probe readiness without credentials. Token comparison uses `hmac.compare_digest` (constant-time). Failed attempts are logged at `warning` with the client IP and request ID. |
 
 ## Presidio pass (optional second detector)
 

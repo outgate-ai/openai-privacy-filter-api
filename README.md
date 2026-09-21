@@ -126,7 +126,7 @@ With the pass off (the default), the response shape is unchanged — no `source`
 ### Headers
 
 - `x-request-id` — echoed back if set by the caller, otherwise a new UUID is generated and returned.
-- `authorization: Bearer <token>` or `x-api-key: <token>` — **required on all `/api/*` endpoints when `OPF_API_AUTH_TOKEN` is set.** Unauthenticated requests return HTTP 401 with `WWW-Authenticate: Bearer`. `/health` is exempt so orchestrators can still probe it. Leave the env var unset to run open (default).
+- `authorization: Bearer <token>` or `x-api-key: <token>` — **required on all `/api/*` endpoints when `OPF_API_AUTH_TOKEN` is set** (comma-separate several tokens to accept any of them). Unauthenticated requests return HTTP 401 with `WWW-Authenticate: Bearer`. `/health` is exempt so orchestrators can still probe it. Leave the env var unset to run open (default).
 
 Example with auth:
 
