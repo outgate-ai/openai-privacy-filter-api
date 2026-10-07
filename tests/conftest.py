@@ -20,6 +20,7 @@ class FakeEngine:
         self.error: str | None = None
         self.load_calls = 0
         self.redact_calls: list[str] = []
+        self.release_calls = 0
 
     def load(self) -> None:
         self.load_calls += 1
@@ -30,6 +31,10 @@ class FakeEngine:
         if self.state != "ready":
             raise RuntimeError(f"engine not ready (state={self.state})")
         return list(self._spans_by_input.get(text, []))
+
+    def release_cached_memory(self) -> tuple[int, int] | None:
+        self.release_calls += 1
+        return 2 * 1024**3, 1024**3
 
 
 @pytest.fixture

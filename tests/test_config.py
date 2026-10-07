@@ -114,3 +114,12 @@ def test_cli_overrides_env(monkeypatch):
     cfg = Config.from_env().override(port=1234, device="cuda")
     assert cfg.port == 1234
     assert cfg.device == "cuda"
+
+
+def test_idle_release_seconds(monkeypatch):
+    monkeypatch.delenv("OPF_API_IDLE_RELEASE_SECONDS", raising=False)
+    assert Config.from_env().idle_release_seconds == 300
+    monkeypatch.setenv("OPF_API_IDLE_RELEASE_SECONDS", "0")
+    cfg = Config.from_env()
+    assert cfg.idle_release_seconds == 0
+    assert cfg.override(port=1).idle_release_seconds == 0

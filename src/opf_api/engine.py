@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import gc
 import logging
 import os
 from dataclasses import dataclass
@@ -27,6 +28,7 @@ class Engine(Protocol):
     def error(self) -> str | None: ...
     def load(self) -> None: ...
     def redact(self, text: str) -> list[DetectedSpan]: ...
+    def release_cached_memory(self) -> tuple[int, int] | None: ...
 
 
 class OPFEngine:
@@ -111,6 +113,20 @@ class OPFEngine:
             raise RuntimeError(f"engine not ready (state={self._state})")
         result = self._opf.redact(text)
         return [DetectedSpan(text=s.text, category=s.label) for s in result.detected_spans]
+
+    def release_cached_memory(self) -> tuple[int, int] | None:
+        """Hand cached-but-unused CUDA blocks back to the driver; weights stay loaded.
+
+        Returns reserved bytes before and after, or None when not on a GPU.
+        """
+        if self._device != "cuda" or self._state != "ready":
+            return None
+        import torch
+
+        before = torch.cuda.memory_reserved()
+        gc.collect()
+        torch.cuda.empty_cache()
+        return before, torch.cuda.memory_reserved()
 
     def _resolve_checkpoint_path(self) -> Path:
         if self._model_path:

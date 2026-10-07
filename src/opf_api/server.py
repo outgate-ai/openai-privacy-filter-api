@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import hmac
 import json
 import logging
@@ -45,6 +46,8 @@ logger = logging.getLogger(__name__)
 
 # 1-2 char spans (a stray initial, a single digit) are almost always false positives.
 MIN_DETECTION_LEN = 3
+
+IDLE_CHECK_INTERVAL_SECONDS = 30.0
 
 
 def _iso_now() -> str:
@@ -178,6 +181,7 @@ def create_app(
     presidio_fail_open: bool = True,
     precision_filters: bool = True,
     noisy_categories: tuple[str, ...] = DEFAULT_NOISY_CATEGORIES,
+    idle_release_seconds: float = 300,
 ) -> FastAPI:
     """Build the FastAPI app.
 
@@ -207,13 +211,43 @@ def create_app(
             viterbi_calibration_path=viterbi_calibration_path,
         )
 
+    last_used = time.monotonic()
+    idle_released = True
+
+    async def _release_when_idle() -> None:
+        nonlocal idle_released
+        interval = min(idle_release_seconds, IDLE_CHECK_INTERVAL_SECONDS)
+        while True:
+            await asyncio.sleep(interval)
+            if idle_released or time.monotonic() - last_used < idle_release_seconds:
+                continue
+            idle_released = True
+            try:
+                released = engine.release_cached_memory()
+            except Exception:
+                logger.exception("idle memory release failed")
+                continue
+            if released is not None:
+                before, after = released
+                logger.info(
+                    "idle %gs: released cached GPU memory, reserved %.2f GB -> %.2f GB",
+                    idle_release_seconds,
+                    before / 1e9,
+                    after / 1e9,
+                )
+
     @asynccontextmanager
     async def lifespan(_: FastAPI):
         if owned_engine:
             engine.load()
+        release_task = (
+            asyncio.create_task(_release_when_idle()) if idle_release_seconds > 0 else None
+        )
         try:
             yield
         finally:
+            if release_task is not None:
+                release_task.cancel()
             if owned_presidio and presidio_client is not None:
                 await presidio_client.aclose()
 
@@ -230,6 +264,9 @@ def create_app(
         With the Presidio pass off the response stays exactly what it was
         before the pass existed: OPF order, no ``source`` field.
         """
+        nonlocal last_used, idle_released
+        last_used = time.monotonic()
+        idle_released = False
         if presidio_client is None:
             return [
                 {

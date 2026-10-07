@@ -13,6 +13,8 @@ from .presidio import DEFAULT_ENTITIES
 CONTEXT_WINDOW_LENGTH_MAX = 131072
 CONTEXT_WINDOW_LENGTH_DEFAULT = CONTEXT_WINDOW_LENGTH_MAX
 
+IDLE_RELEASE_SECONDS_DEFAULT = 300
+
 PRESIDIO_URL_DEFAULT = "http://presidio:3000"
 PRESIDIO_SCORE_THRESHOLD_DEFAULT = 0.5
 
@@ -107,6 +109,7 @@ class Config:
     presidio_fail_open: bool
     precision_filters: bool
     noisy_categories: tuple[str, ...]
+    idle_release_seconds: int
 
     @classmethod
     def from_env(cls) -> Config:
@@ -148,6 +151,9 @@ class Config:
                 "OPF_API_NOISY_CATEGORIES", DEFAULT_NOISY_CATEGORIES
             )
             or (),
+            idle_release_seconds=_env_int(
+                "OPF_API_IDLE_RELEASE_SECONDS", IDLE_RELEASE_SECONDS_DEFAULT
+            ),
         )
 
     def override(
@@ -245,6 +251,7 @@ class Config:
                 if noisy_categories is not None
                 else self.noisy_categories
             ),
+            idle_release_seconds=self.idle_release_seconds,
         )
 
 

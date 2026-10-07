@@ -211,6 +211,7 @@ def main(argv: list[str] | None = None) -> int:
         presidio_fail_open=cfg.presidio_fail_open,
         precision_filters=cfg.precision_filters,
         noisy_categories=cfg.noisy_categories,
+        idle_release_seconds=cfg.idle_release_seconds,
     )
     uvicorn.run(app, host=cfg.host, port=cfg.port, log_level=cfg.log_level)
     return 0

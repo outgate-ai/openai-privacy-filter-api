@@ -12,6 +12,7 @@
 | `OPF_API_MODEL_PATH` | unset | Override the OPF checkpoint directory. If unset, falls back to `OPF_CHECKPOINT`, then `~/.opf/privacy_filter`. Missing checkpoints are auto-downloaded from Hugging Face on first load. |
 | `OPF_API_MODEL_NAME` | `openai-privacy-filter` | The model name advertised on `GET /api/tags` **and required** as the `model` field on `POST /api/chat`. Requests with any other `model` value return HTTP 404. Change this only if you want to hide behind a different identifier (e.g. to mimic an existing Ollama tag your client already calls). |
 | `OPF_API_LOG_LEVEL` | `info` | Log level: `debug`, `info`, `warning`, or `error`. |
+| `OPF_API_IDLE_RELEASE_SECONDS` | `300` | After this many seconds without a detection request, cached-but-unused GPU memory is returned to the driver; the model weights stay loaded, so the next request pays milliseconds, not a reload. PyTorch otherwise keeps the memory reserved by the longest input it has seen for the life of the process. Checked at most every 30 s, once per idle period, logged at `info` with reserved GB before and after. `0` disables. No effect on `cpu`. |
 
 ## Input preprocessing
 
