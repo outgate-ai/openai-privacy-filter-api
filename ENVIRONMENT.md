@@ -14,6 +14,25 @@
 | `OPF_API_LOG_LEVEL` | `info` | Log level: `debug`, `info`, `warning`, or `error`. |
 | `OPF_API_IDLE_RELEASE_SECONDS` | `300` | After this many seconds without a detection request, cached-but-unused GPU memory is returned to the driver; the model weights stay loaded, so the next request pays milliseconds, not a reload. PyTorch otherwise keeps the memory reserved by the longest input it has seen for the life of the process. Checked at most every 30 s, once per idle period, logged at `info` with reserved GB before and after. `0` disables. No effect on `cpu`. |
 
+## Model version (released fine-tunes)
+
+The image can run a released fine-tuned model instead of the upstream checkpoint. With none of these set it behaves exactly as before: the upstream `openai/privacy-filter` checkpoint in `~/.opf/privacy_filter` (the **baseline**).
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `OPF_API_MODEL_ID` | unset | Pin a released model id (e.g. `opf-v21-…`). `opf-v0-baseline` selects the upstream checkpoint. Wins over the channel. |
+| `OPF_API_MODEL_CHANNEL` | unset | Resolve a release channel (`stable`, `candidate`, `baseline`) at start. |
+| `OPF_MODELS_BUCKET` / `OPF_MODELS_PREFIX` / `OPF_MODELS_REGION` | `outgate-prod-opf-models` / `opf` / `eu-central-1` | Where releases live. |
+| `OPF_MODELS_REQUIRED` | `false` | `true`: fail start-up if the selected model cannot be fetched and verified, instead of falling back to the baseline. |
+| `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` / `AWS_SESSION_TOKEN`, or `AWS_ROLE_ARN` + `AWS_WEB_IDENTITY_TOKEN_FILE` | — | Read credentials for the release bucket; nothing is baked into the image. |
+| `OPF_API_LABEL_CATEGORIES` | unset | Per-label guardrail category override, `label=category,…` (e.g. `entity_id=personal_information`). |
+
+At start the entrypoint runs `opf_models.py fetch`: it downloads the model's `runtime/` files into `~/.opf/models/<id>/`, checks every file's sha256 against the release manifest, and sets `OPF_API_MODEL_PATH` and `OPF_API_VITERBI_CALIBRATION_PATH`. A verified cache is reused on restart, including offline. Any failure logs one warning and falls back to the baseline unless `OPF_MODELS_REQUIRED=true`. An explicit `OPF_API_MODEL_PATH` always wins.
+
+Released 41-label models add two labels on top of the 8 OPF categories: `entity_id` (UUIDs, hashes, opaque record and run ids) and `timestamp`. Both map to the guardrail category `sensitive_data` by default; the guardrail's default policy has that category off, so enable it in the policy, or map the labels elsewhere with `OPF_API_LABEL_CATEGORIES`, to have them anonymized.
+
+To roll back, unset `OPF_API_MODEL_ID`/`OPF_API_MODEL_CHANNEL` (or set `OPF_API_MODEL_ID=opf-v0-baseline`) and recreate the container.
+
 ## Input preprocessing
 
 | Variable | Default | Description |

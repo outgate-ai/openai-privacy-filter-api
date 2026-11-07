@@ -93,7 +93,7 @@ class OPFEngine:
                     self._opf.set_viterbi_decoder(
                         calibration_path=self._viterbi_calibration_path
                     )
-                self._opf.get_runtime()
+                self._install_head_bias(self._opf.get_runtime())
                 self._state = "ready"
                 logger.info(
                     "Privacy Filter ready (device=%s, n_ctx=%s, output_mode=%s, decode_mode=%s)",
@@ -107,6 +107,27 @@ class OPFEngine:
                 self._error = str(exc)
                 logger.exception("Failed to load Privacy Filter")
                 raise
+
+    def _install_head_bias(self, runtime) -> None:
+        """Fine-tuned releases carry a classifier-head bias as ``unembedding.bias``;
+        the opf loader builds the head without one, so add it after load. The
+        upstream checkpoint has no such tensor and is left untouched."""
+        path = self._resolve_checkpoint_path() / "model.safetensors"
+        if not path.is_file():
+            return
+        from safetensors import safe_open
+        import torch
+
+        with safe_open(str(path), framework="pt") as handle:
+            if "unembedding.bias" not in handle.keys():
+                return
+            bias = handle.get_tensor("unembedding.bias")
+        model = getattr(runtime.model, "_orig_mod", runtime.model)
+        head = model.unembedding
+        if bias.shape[0] != head.weight.shape[0]:
+            raise ValueError(f"head bias has {bias.shape[0]} rows, head has {head.weight.shape[0]}")
+        head.bias = torch.nn.Parameter(bias.to(device=head.weight.device, dtype=head.weight.dtype), requires_grad=False)
+        logger.info("Installed classifier head bias (%d labels)", bias.shape[0])
 
     def redact(self, text: str) -> list[DetectedSpan]:
         if self._state != "ready" or self._opf is None:

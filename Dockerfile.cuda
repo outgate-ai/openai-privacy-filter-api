@@ -47,6 +47,7 @@ RUN useradd --create-home --uid 1000 opf \
     && mkdir -p /home/opf/.opf \
     && chown -R opf:opf /home/opf
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+COPY scripts/opf_models.py /usr/local/bin/opf_models.py
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 # --- Layer 4: pip-installable project metadata. Invalidated when

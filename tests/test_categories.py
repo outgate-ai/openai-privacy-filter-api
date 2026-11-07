@@ -34,6 +34,11 @@ def test_every_known_label_maps_to_a_guardrail_category(label):
     assert map_category(label) in {"personal_information", "credentials"}
 
 
+@pytest.mark.parametrize("label", ["entity_id", "timestamp"])
+def test_release_labels_map_to_sensitive_data(label):
+    assert map_category(label) == "sensitive_data"
+
+
 def test_secret_and_url_map_to_credentials():
     assert map_category("secret") == "credentials"
     assert map_category("private_url") == "credentials"
@@ -61,3 +66,15 @@ def test_unknown_label_falls_back_safely_with_warning(caplog):
     assert any(
         "future_new_category" in rec.getMessage() for rec in caplog.records
     )
+
+
+def test_label_category_overrides_parse():
+    from opf_api.categories import _overrides
+
+    assert _overrides("entity_id=personal_information, timestamp=sensitive_data") == {
+        "entity_id": "personal_information",
+        "timestamp": "sensitive_data",
+    }
+    assert _overrides("") == {}
+    with pytest.raises(ValueError):
+        _overrides("entity_id")
