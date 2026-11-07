@@ -13,6 +13,7 @@ from opf_api.precision import (
     DEFAULT_NOISY_CATEGORIES,
     apply_precision_filters,
     is_bare_word_secret,
+    is_file_name_secret,
 )
 from opf_api.presidio import DEFAULT_ENTITIES
 from opf_api.server import create_app
@@ -157,3 +158,19 @@ def test_lettered_identifier_under_account_number_survives():
 def test_private_date_is_dropped_regardless_of_letters():
     dets = [MergedDetection("2026-09-14T08:12:03Z", "personal_information", "private_date", SOURCE_OPF)]
     assert _filter(dets) == []
+
+
+@pytest.mark.parametrize(
+    "name",
+    ["model_q4f16.onnx_data", "model.safetensors", "pytorch_model-00001-of-00004.bin", "partial/step.json", "tokenizer_config.json"],
+)
+def test_artifact_file_names_are_not_secrets(name):
+    assert is_file_name_secret(name)
+
+
+@pytest.mark.parametrize(
+    "value",
+    ["sk_live_4eC39HqLyjWDarjtT1zdp7dc.json", "AKIAIOSFODNN7EXAMPLE", "ghp_16C7e42F292c6912E7710c838347Ae178B4a.txt", "config prod.yaml", "notes"],
+)
+def test_key_shaped_or_non_file_values_are_not_file_names(value):
+    assert not is_file_name_secret(value)

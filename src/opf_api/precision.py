@@ -13,7 +13,10 @@ generalizing a pattern past the point where it still means anything:
 * ``secret`` fires on bare dictionary words — a company or product name in a
   file path, a hostname, an image reference. A credential that is nothing but
   letters has close to no entropy, so the shape is not a secret regardless of
-  what the label says.
+  what the label says. It also fires on artifact file names
+  (``model_q4f16.onnx_data``, ``pytorch_model-00001-of-00004.bin``); a name made
+  of short word-like parts and ending in a known file extension is a file, not
+  a credential.
 
 Everything here is opt-out (``OPF_API_PRECISION_FILTERS=false``) and the
 category set is configurable, because each rule trades recall for precision
@@ -23,6 +26,7 @@ and the right point differs per deployment.
 from __future__ import annotations
 
 import logging
+import re
 
 from .merge import SOURCE_OPF, MergedDetection
 
@@ -40,6 +44,33 @@ def is_bare_word_secret(text: str) -> bool:
     """True for a single all-alphabetic token short enough to be a word."""
     return text.isalpha() and len(text) <= BARE_WORD_MAX_LEN
 
+
+
+FILE_EXTENSIONS = frozenset(
+    ["onnx", "onnx_data", "safetensors", "bin", "pt", "pth", "ckpt", "gguf", "h5", "npz", "npy", "json", "jsonl", "yaml", "yml", "toml", "lock", "log", "txt", "md", "csv", "tsv", "tar", "gz", "tgz", "zip", "whl", "so", "dylib", "dll", "py", "js", "ts", "go", "rs", "java"]
+)
+# Parts of a file name longer than this, or mixing letters and digits beyond
+# it, look like key material rather than words.
+FILE_PART_MAX_LEN = 16
+_FILE_SPLIT = re.compile(r"[._/\\-]")
+
+
+def is_file_name_secret(text: str) -> bool:
+    """True for a word-like file name ending in a known extension."""
+    if any(ch.isspace() for ch in text) or "." not in text:
+        return False
+    stem, _, ext = text.rpartition(".")
+    if ext.lower() not in FILE_EXTENSIONS and not text.lower().endswith(".onnx_data"):
+        return False
+    parts = [p for p in _FILE_SPLIT.split(stem) if p]
+    if not parts:
+        return False
+    for part in parts:
+        if len(part) > FILE_PART_MAX_LEN:
+            return False
+        if not (part.isalpha() or part.isdigit()) and len(part) > 8:
+            return False
+    return True
 
 
 def _carries_no_structure(source_category: str, text: str) -> bool:
@@ -81,6 +112,9 @@ def apply_precision_filters(
             continue
         if det.source_category == "secret" and is_bare_word_secret(det.text):
             dropped.append((det.source_category, "bare-word"))
+            continue
+        if det.source_category == "secret" and is_file_name_secret(det.text):
+            dropped.append((det.source_category, "file-name"))
             continue
         kept.append(det)
 
