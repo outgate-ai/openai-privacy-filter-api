@@ -115,11 +115,11 @@ class OPFEngine:
         path = self._resolve_checkpoint_path() / "model.safetensors"
         if not path.is_file():
             return
-        from safetensors import safe_open
         import torch
+        from safetensors import safe_open
 
         with safe_open(str(path), framework="pt") as handle:
-            if "unembedding.bias" not in handle.keys():
+            if "unembedding.bias" not in handle.keys():  # noqa: SIM118 (safe_open handles have no __contains__)
                 return
             bias = handle.get_tensor("unembedding.bias")
         model = getattr(runtime.model, "_orig_mod", runtime.model)
