@@ -325,3 +325,16 @@ def test_people_and_other_spellings_stay_persons(value):
 def test_product_name_under_another_label_is_untouched():
     span = DetectedSpan(text="Claude", category="secret")
     assert refine_spans("key Claude", [span]) == [span]
+
+
+@pytest.mark.parametrize("value", ["9f3c2a1", "0c1d2e3f4a5b", "3f2a" * 2 + "-" + "9e1d-4c2b-8a7f-" + "0b1c" * 3])
+def test_uuid_and_short_hex_accounts_are_identifiers_when_opted_in(value):
+    spans = [DetectedSpan(text=value, category="account_number")]
+    assert refine_spans("ref " + value, spans, digit_runs_as_entity_id=True) == [DetectedSpan(text=value, category="entity_id")]
+    assert refine_spans("ref " + value, spans) == spans
+
+
+@pytest.mark.parametrize("value", ["0c1d2e3f" * 2, "abcdefa", "deadbeef" + "c0ffee" + "1", "9F3C2A1"])
+def test_long_or_letter_only_hex_accounts_stay_accounts(value):
+    span = DetectedSpan(text=value, category="account_number")
+    assert refine_spans("ref " + value, [span], digit_runs_as_entity_id=True) == [span]

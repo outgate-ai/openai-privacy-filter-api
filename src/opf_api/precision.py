@@ -136,8 +136,19 @@ def _luhn_ok(digits: str) -> bool:
     return total % 10 == 0
 
 
+# UUIDs and 7-12 char lowercase hex strings (short commit ids) tagged
+# ``account_number`` are machine ids too: 58 such spans on dev, none in gold.
+# 16-hex values are left alone; gold labels some of those as accounts.
+_HEX_ID = re.compile(
+    r"^(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|(?=[0-9a-f]*[a-f])(?=[0-9a-f]*[0-9])[0-9a-f]{7,12})$"
+)
+
+
 def is_digit_run_id(text: str) -> bool:
-    """True for a bare digit run that cannot be a payment card number."""
+    """True for a bare digit run that cannot be a payment card number, a UUID,
+    or a short hex id."""
+    if _HEX_ID.match(text):
+        return True
     return _DIGIT_RUN.match(text) is not None and not (13 <= len(text) <= 19 and _luhn_ok(text))
 
 
@@ -192,7 +203,7 @@ def refine_spans(
     disables sensitive_data would unmask: ``iso_dates_as_timestamp`` (a bare ISO
     ``private_date`` without a birth cue becomes ``timestamp``) and
     ``digit_runs_as_entity_id`` (a bare digit-run ``account_number`` that fails
-    the card checksum becomes ``entity_id``).
+    the card checksum, a UUID or a short hex id becomes ``entity_id``).
     """
     out: list[DetectedSpan] = []
     taken: list[tuple[int, int]] = []
