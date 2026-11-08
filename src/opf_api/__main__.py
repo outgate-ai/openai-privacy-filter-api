@@ -8,11 +8,13 @@ from __future__ import annotations
 
 import argparse
 import logging
+import os
 import sys
 
 import uvicorn
 
 from .config import Config
+from .engine import OPFEngine
 from .server import create_app
 
 
@@ -192,6 +194,17 @@ def main(argv: list[str] | None = None) -> int:
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
 
+    shadow_engine = None
+    if cfg.shadow_label or cfg.shadow_model_path:
+        shadow_engine = OPFEngine(
+            device=cfg.device,
+            model_path=cfg.shadow_model_path,
+            context_window_length=cfg.context_window_length,
+            output_mode=cfg.output_mode,
+            decode_mode=cfg.decode_mode,
+            viterbi_calibration_path=cfg.shadow_viterbi_calibration_path,
+        )
+
     app = create_app(
         device=cfg.device,
         model_path=cfg.model_path,
@@ -212,6 +225,9 @@ def main(argv: list[str] | None = None) -> int:
         precision_filters=cfg.precision_filters,
         noisy_categories=cfg.noisy_categories,
         idle_release_seconds=cfg.idle_release_seconds,
+        shadow_engine=shadow_engine,
+        shadow_label=cfg.shadow_label or "shadow",
+        primary_label=os.environ.get("OPF_API_MODEL_RESOLVED") or "opf-v0-baseline",
     )
     uvicorn.run(app, host=cfg.host, port=cfg.port, log_level=cfg.log_level)
     return 0

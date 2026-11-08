@@ -17,4 +17,8 @@ if [[ -z "${OPF_API_MODEL_PATH:-}" ]] && [[ -n "${OPF_API_MODEL_ID:-}${OPF_API_M
     eval "$(python3 /usr/local/bin/opf_models.py fetch --exports)"
 fi
 
+# Optional shadow model for live comparison (counts only, see ENVIRONMENT.md).
+if [[ -z "${OPF_API_SHADOW_MODEL_PATH:-}" ]] && [[ -n "${OPF_API_SHADOW_MODEL_ID:-}${OPF_API_SHADOW_MODEL_CHANNEL:-}" ]]; then
+    eval "$(python3 /usr/local/bin/opf_models.py fetch --shadow --exports)"
+fi
 exec opf-api "$@"

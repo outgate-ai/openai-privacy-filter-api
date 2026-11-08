@@ -405,8 +405,11 @@ def exports_for(model_id: str, cache: Path) -> dict[str, str]:
 
 
 def cmd_fetch(args) -> int:
-    model_id = (args.model_id or os.environ.get("OPF_API_MODEL_ID") or "").strip() or None
-    channel = (args.channel or os.environ.get("OPF_API_MODEL_CHANNEL") or "").strip() or None
+    # --shadow reads OPF_API_SHADOW_MODEL_ID / _CHANNEL and exports OPF_API_SHADOW_*;
+    # a shadow that resolves to the baseline still exports its name so it is enabled.
+    var = "OPF_API_SHADOW_" if args.shadow else "OPF_API_"
+    model_id = (args.model_id or os.environ.get(var + "MODEL_ID") or "").strip() or None
+    channel = (args.channel or os.environ.get(var + "MODEL_CHANNEL") or "").strip() or None
     required = args.required or os.environ.get("OPF_MODELS_REQUIRED", "").lower() in ("1", "true", "yes")
     home = Path(args.home or os.environ.get("OPF_MODELS_HOME") or Path.home() / ".opf")
     bucket = os.environ.get("OPF_MODELS_BUCKET", DEFAULT_BUCKET)
@@ -430,9 +433,13 @@ def cmd_fetch(args) -> int:
             return 0
     if result is None:
         log("baseline selected (upstream checkpoint)")
+        if args.shadow:
+            print(f"{'export ' if args.exports else ''}OPF_API_SHADOW_MODEL_RESOLVED=opf-v0-baseline")
         return 0
     rid, cache = result
     for k, v in exports_for(rid, cache).items():
+        if args.shadow:
+            k = k.replace("OPF_API_", "OPF_API_SHADOW_", 1)
         print(f"{'export ' if args.exports else ''}{k}={shlex.quote(v)}")
     log(f"{rid} ready at {cache}")
     return 0
@@ -448,6 +455,7 @@ def main(argv=None) -> int:
     f.add_argument("--include", action="append", help="path prefixes to fetch (default runtime/)")
     f.add_argument("--required", action="store_true")
     f.add_argument("--exports", action="store_true", help="print `export K=V` lines for eval")
+    f.add_argument("--shadow", action="store_true", help="resolve the shadow model (OPF_API_SHADOW_MODEL_ID / _CHANNEL)")
     f.set_defaults(func=cmd_fetch)
     args = p.parse_args(argv)
     return args.func(args)

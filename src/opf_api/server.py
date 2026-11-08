@@ -41,6 +41,7 @@ from .precision import (
 )
 from .preprocess import normalize_whitespace
 from .presidio import DEFAULT_ENTITIES, PresidioClient, map_entity
+from .shadow import Shadow
 
 logger = logging.getLogger(__name__)
 
@@ -182,6 +183,9 @@ def create_app(
     precision_filters: bool = True,
     noisy_categories: tuple[str, ...] = DEFAULT_NOISY_CATEGORIES,
     idle_release_seconds: float = 300,
+    shadow_engine: Engine | None = None,
+    shadow_label: str = "shadow",
+    primary_label: str = "primary",
 ) -> FastAPI:
     """Build the FastAPI app.
 
@@ -210,6 +214,12 @@ def create_app(
             decode_mode=decode_mode,
             viterbi_calibration_path=viterbi_calibration_path,
         )
+
+    shadow = (
+        Shadow(shadow_engine, label=shadow_label, primary_label=primary_label)
+        if shadow_engine is not None
+        else None
+    )
 
     last_used = time.monotonic()
     idle_released = True
@@ -240,6 +250,11 @@ def create_app(
     async def lifespan(_: FastAPI):
         if owned_engine:
             engine.load()
+        if shadow is not None:
+            try:
+                shadow.start()
+            except Exception:
+                logger.exception("shadow model failed to load; serving without it")
         release_task = (
             asyncio.create_task(_release_when_idle()) if idle_release_seconds > 0 else None
         )
@@ -248,6 +263,8 @@ def create_app(
         finally:
             if release_task is not None:
                 release_task.cancel()
+            if shadow is not None:
+                shadow.stop()
             if owned_presidio and presidio_client is not None:
                 await presidio_client.aclose()
 
@@ -267,6 +284,9 @@ def create_app(
         nonlocal last_used, idle_released
         last_used = time.monotonic()
         idle_released = False
+        spans = engine.redact(text)
+        if shadow is not None:
+            shadow.submit(request_id, text, spans)
         if presidio_client is None:
             return [
                 {
@@ -274,7 +294,7 @@ def create_app(
                     "category": map_category(span.category),
                     "source_category": span.category,
                 }
-                for span in engine.redact(text)
+                for span in spans
                 if len(span.text) >= MIN_DETECTION_LEN
                 and not (
                     precision_filters
@@ -290,7 +310,7 @@ def create_app(
                 source_category=span.category,
                 source=SOURCE_OPF,
             )
-            for span in engine.redact(text)
+            for span in spans
         ]
 
         try:
@@ -371,6 +391,12 @@ def create_app(
     @app.get("/health")
     async def health():
         return {"status": engine.state, "error": engine.error}
+
+    @app.get("/api/shadow", dependencies=[Depends(require_auth)])
+    async def api_shadow():
+        if shadow is None:
+            raise HTTPException(status_code=404, detail="no shadow model configured")
+        return shadow.summary()
 
     @app.get("/api/version", dependencies=[Depends(require_auth)])
     async def api_version() -> VersionResponse:

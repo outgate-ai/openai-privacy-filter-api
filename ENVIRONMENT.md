@@ -33,6 +33,26 @@ Released 41-label models add two labels on top of the 8 OPF categories: `entity_
 
 To roll back, unset `OPF_API_MODEL_ID`/`OPF_API_MODEL_CHANNEL` (or set `OPF_API_MODEL_ID=opf-v0-baseline`) and recreate the container.
 
+## Shadow model (live comparison)
+
+A second checkpoint can score every scanned text next to the serving model, to
+compare a candidate (or the baseline) on live traffic before promoting it. The
+response always comes from the serving model; the shadow runs on one worker
+thread after the response and skips texts when its queue is full. Only per-label
+span counts are logged (`shadow rid=... <primary>=<label>:<n>,... <shadow>=... same=...`,
+plus a `shadow summary` every 100 texts), never text. `GET /api/shadow` returns the
+running totals.
+
+| Variable | Default | Effect |
+|---|---|---|
+| `OPF_API_SHADOW_MODEL_ID` | unset | Released model to run as the shadow (`opf-v0-baseline` for the upstream checkpoint). |
+| `OPF_API_SHADOW_MODEL_CHANNEL` | unset | Resolve the shadow from a release channel instead. |
+| `OPF_API_SHADOW_MODEL_PATH` | unset | Local checkpoint for the shadow; wins over the two above. |
+| `OPF_API_SHADOW_VITERBI_CALIBRATION_PATH` | unset | Its Viterbi calibration. |
+
+The shadow needs its own GPU memory (about the size of the checkpoint) and roughly
+doubles GPU work per scan; leave it unset in normal operation.
+
 ## Input preprocessing
 
 | Variable | Default | Description |

@@ -110,6 +110,9 @@ class Config:
     precision_filters: bool
     noisy_categories: tuple[str, ...]
     idle_release_seconds: int
+    shadow_model_path: str | None = None
+    shadow_viterbi_calibration_path: str | None = None
+    shadow_label: str | None = None
 
     @classmethod
     def from_env(cls) -> Config:
@@ -154,6 +157,12 @@ class Config:
             idle_release_seconds=_env_int(
                 "OPF_API_IDLE_RELEASE_SECONDS", IDLE_RELEASE_SECONDS_DEFAULT
             ),
+            shadow_model_path=os.environ.get("OPF_API_SHADOW_MODEL_PATH") or None,
+            shadow_viterbi_calibration_path=os.environ.get(
+                "OPF_API_SHADOW_VITERBI_CALIBRATION_PATH"
+            )
+            or None,
+            shadow_label=os.environ.get("OPF_API_SHADOW_MODEL_RESOLVED") or None,
         )
 
     def override(
@@ -252,6 +261,9 @@ class Config:
                 else self.noisy_categories
             ),
             idle_release_seconds=self.idle_release_seconds,
+            shadow_model_path=self.shadow_model_path,
+            shadow_viterbi_calibration_path=self.shadow_viterbi_calibration_path,
+            shadow_label=self.shadow_label,
         )
 
 
