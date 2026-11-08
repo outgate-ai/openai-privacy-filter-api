@@ -131,6 +131,15 @@ def test_endpoint_drops_a_bare_word_secret_with_the_pass_off():
     assert _detections(_post(client, text)) == []
 
 
+def test_endpoint_drops_a_file_name_secret_with_the_pass_off():
+    text = "onnx/model_q4f16.onnx + model_q4f16.onnx_data"
+    engine = FakeEngine(
+        spans_by_input={text: [DetectedSpan(text="model_q4f16.onnx_data", category="secret")]}
+    )
+    client = TestClient(create_app(engine=engine, model_name="openai-privacy-filter"))
+    assert _detections(_post(client, text)) == []
+
+
 def test_endpoint_keeps_the_bare_word_when_filters_are_disabled():
     text = "clone from the outgate repo"
     engine = FakeEngine(spans_by_input={text: [DetectedSpan(text="outgate", category="secret")]})

@@ -38,6 +38,7 @@ from .precision import (
     DEFAULT_NOISY_CATEGORIES,
     apply_precision_filters,
     is_bare_word_secret,
+    is_file_name_secret,
 )
 from .preprocess import normalize_whitespace
 from .presidio import DEFAULT_ENTITIES, PresidioClient, map_entity
@@ -299,7 +300,7 @@ def create_app(
                 and not (
                     precision_filters
                     and span.category == "secret"
-                    and is_bare_word_secret(span.text)
+                    and (is_bare_word_secret(span.text) or is_file_name_secret(span.text))
                 )
             ]
 
