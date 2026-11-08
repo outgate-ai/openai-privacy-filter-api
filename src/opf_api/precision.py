@@ -84,6 +84,13 @@ _POD_NAME = re.compile(
 )
 
 
+# Resource ids made of a short lowercase prefix and a short hex body (run_<12 hex>,
+# app_<12 hex>, apc_<20 hex>). The model tags them `secret`; on opf-bench dev all
+# 75 such spans are outside gold. Tokens with a 32-hex body under the same kind of
+# prefix are gold secrets, so the body length is capped.
+_PREFIXED_HEX_ID = re.compile(r"^[a-z]{2,10}_[0-9a-f]{8,20}$")
+
+
 def is_file_stem_secret(text: str, value: str, end: int) -> bool:
     """True when ``value`` ends right before a file extension in ``text`` and the
     whole thing is a word-like file name (the model often stops at the dot)."""
@@ -93,6 +100,10 @@ def is_file_stem_secret(text: str, value: str, end: int) -> bool:
 
 def is_pod_name(text: str) -> bool:
     return _POD_NAME.match(text) is not None
+
+
+def is_prefixed_hex_id(text: str) -> bool:
+    return _PREFIXED_HEX_ID.match(text) is not None
 
 
 # A long opaque value under a JSON id key ("token_id": "<40+ base64/hex chars>")
@@ -122,8 +133,9 @@ def refine_spans(text: str, spans: list[DetectedSpan]) -> list[DetectedSpan]:
     A ``secret`` that is the stem of a word-like file name is dropped; a
     ``secret`` shaped like a Kubernetes pod name is an identifier, not a
     credential, and is relabelled ``entity_id`` (still anonymized under
-    sensitive_data). Long opaque values under JSON id keys that nothing
-    covers are added as ``secret``.
+    sensitive_data), as is a prefixed short hex id (``run_<12 hex>``). Long
+    opaque values under JSON id keys that nothing covers are added as
+    ``secret``.
     """
     out: list[DetectedSpan] = []
     taken: list[tuple[int, int]] = []
@@ -138,7 +150,7 @@ def refine_spans(text: str, spans: list[DetectedSpan]) -> list[DetectedSpan]:
             taken.append((start, end))
         if span.category == "secret" and end >= 0 and is_file_stem_secret(text, span.text, end):
             continue
-        if span.category == "secret" and is_pod_name(span.text):
+        if span.category == "secret" and (is_pod_name(span.text) or is_prefixed_hex_id(span.text)):
             span = DetectedSpan(text=span.text, category="entity_id")
         out.append(span)
     return out + keyed_long_secrets(text, taken)
