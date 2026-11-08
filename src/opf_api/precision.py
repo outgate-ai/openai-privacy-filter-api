@@ -197,6 +197,20 @@ def widen_email(text: str, start: int, end: int) -> tuple[int, int]:
     return lo, hi
 
 
+def enclosing_email(text: str, start: int, end: int) -> tuple[int, int]:
+    """The email address that strictly contains ``[start, end)``, else the range itself.
+
+    The model sometimes labels part of an address as ``secret`` or a person
+    (the local part in a path); such a span becomes the whole address as
+    ``private_email``.
+    """
+    for m in _EMAIL.finditer(text, max(0, start - 254), min(len(text), end + 254)):
+        a, b = m.span()
+        if a <= start and end <= b and (a, b) != (start, end):
+            return a, b
+    return start, end
+
+
 # A long opaque value under a JSON id key ("token_id": "<40+ base64/hex chars>")
 # is a credential the model never tags (opf-bench dev: 41 such gold secrets,
 # 13 % of v22's leaked characters, 3 look-alikes; hex values included, gold
@@ -207,12 +221,21 @@ _KEYED_LONG = re.compile(r'"([a-z][a-z0-9]*(?:[A-Z][a-z0-9]*)*Id|[a-z_]*_id|id)"
 _HASH_KEY = re.compile(r"commit|sha|hash|digest|checksum|revision|etag", re.I)
 
 
+def _is_slug_or_path(value: str) -> bool:
+    """A lowercase dash-slug (``build-cache-linux-x64-…``) or a value mixing ``-``
+    with ``/`` is a name or path, not key material: 28 of CredData's 33
+    non-credential keyed values, none of dev's gold ones."""
+    if "-" in value and "/" in value:
+        return True
+    return "-" in value and re.fullmatch(r"[a-z0-9-]+", value) is not None
+
+
 def keyed_long_secrets(text: str, taken: list[tuple[int, int]]) -> list[DetectedSpan]:
     """Secrets for long opaque values under id keys that no detection touches."""
     out = []
     for m in _KEYED_LONG.finditer(text):
         a, b = m.span(2)
-        if _HASH_KEY.search(m.group(1)) or any(s < b and a < e for s, e in taken):
+        if _HASH_KEY.search(m.group(1)) or _is_slug_or_path(m.group(2)) or any(s < b and a < e for s, e in taken):
             continue
         out.append(DetectedSpan(text=m.group(2), category="secret"))
     return out
@@ -230,8 +253,9 @@ def refine_spans(
     A ``secret`` that is the stem of a word-like file name is dropped, as is a
     bare-word ``secret`` that no credential key introduces, and a
     ``private_person`` that is just an AI product name (Claude, Qwen); a
-    ``private_email`` cut short inside an address is replaced by the whole
-    address (kept too if its text occurs elsewhere); a ``secret`` shaped like a Kubernetes pod name is an identifier, not a
+    ``private_email`` cut short inside an address, or any span the model put
+    inside one, is replaced by the whole address as ``private_email`` (kept
+    too if its text occurs elsewhere); a ``secret`` shaped like a Kubernetes pod name is an identifier, not a
     credential, and is relabelled ``entity_id`` (still anonymized under
     sensitive_data), as is a prefixed short hex id (``run_<12 hex>``). Long
     opaque values under JSON id keys that nothing covers are added as ``secret``.
@@ -258,8 +282,9 @@ def refine_spans(
             continue
         if span.category == "secret" and is_dropped_bare_word(text, span.text, start):
             continue
-        if span.category == "private_email" and start >= 0:
-            lo, hi = widen_email(text, start, end)
+        if start >= 0:
+            widen = widen_email if span.category == "private_email" else enclosing_email
+            lo, hi = widen(text, start, end)
             if (lo, hi) != (start, end):
                 address = text[lo:hi]
                 if address not in widened:

@@ -380,5 +380,33 @@ def test_whole_or_non_address_emails_are_unchanged():
     assert refine_spans("mail " + addr + " now", [whole]) == [whole]
     handle = DetectedSpan(text="jo" + "doe", category="private_email")
     assert refine_spans("user jodoe here", [handle]) == [handle]
-    person = DetectedSpan(text="jo", category="private_person")
-    assert refine_spans("to " + addr, [person]) == [person]
+    person = DetectedSpan(text="Jo", category="private_person")
+    assert refine_spans("Jo wrote to " + addr, [person]) == [person]
+
+
+@pytest.mark.parametrize("label", ["secret", "private_person", "private_url"])
+def test_span_inside_an_email_address_becomes_the_address(label):
+    addr = _addr()
+    text = "cd /workspace/" + addr + "/notes"
+    out = refine_spans(text, [DetectedSpan(text=addr[:6], category=label)])
+    assert out == [DetectedSpan(text=addr, category="private_email")]
+
+
+def test_span_reaching_past_the_address_is_left_alone():
+    addr = _addr()
+    url = "https://files.example/" + addr + "/notes"
+    span = DetectedSpan(text=url, category="private_url")
+    assert refine_spans("open " + url, [span]) == [span]
+
+
+@pytest.mark.parametrize(
+    "value",
+    ["build-cache-" + "linux-x64-" + "node20-" + "2026-11-08-" + "release-candidate", "Ab9-" + "x" * 30 + "/" + "y" * 10],
+)
+def test_keyed_slug_or_path_values_are_not_secrets(value):
+    assert refine_spans('{"cache' + '_id": "' + value + '"}', []) == []
+
+
+def test_keyed_base64url_with_dashes_still_counts():
+    value = "Kp7-" + "Zq8_" * 10 + "Aa"
+    assert refine_spans('{"token' + '_id": "' + value + '"}', []) == [DetectedSpan(text=value, category="secret")]
