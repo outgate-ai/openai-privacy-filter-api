@@ -274,3 +274,20 @@ def test_prefixed_short_hex_id_is_an_identifier_not_a_secret(value):
 def test_long_or_non_hex_prefixed_tokens_stay_secrets(value):
     span = DetectedSpan(text=value, category="secret")
     assert refine_spans("key " + value, [span]) == [span]
+
+
+@pytest.mark.parametrize("name", ["Claude", "Qwen", "Ollama", "Gemini"])
+def test_ai_product_name_is_not_a_person(name):
+    text = "ask " + name + " to review it"
+    assert refine_spans(text, [DetectedSpan(text=name, category="private_person")]) == []
+
+
+@pytest.mark.parametrize("value", ["Claude Monet", "Jules", "Alexa", "claude"])
+def test_people_and_other_spellings_stay_persons(value):
+    span = DetectedSpan(text=value, category="private_person")
+    assert refine_spans("met " + value + " today", [span]) == [span]
+
+
+def test_product_name_under_another_label_is_untouched():
+    span = DetectedSpan(text="Claude", category="secret")
+    assert refine_spans("key Claude", [span]) == [span]
