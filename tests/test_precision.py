@@ -221,3 +221,28 @@ def test_endpoint_applies_context_rules():
     client = TestClient(create_app(engine=engine, model_name="openai-privacy-filter"))
     dets = _detections(_post(client, text))
     assert [(d["source_category"], d["category"]) for d in dets] == [("entity_id", "sensitive_data")]
+
+
+def _long(n, seed="Zq8"):
+    return (seed * n)[:n]
+
+
+def test_long_opaque_value_under_an_id_key_becomes_a_secret():
+    value = _long(44)
+    text = '{"session' + '_id": "' + value + '", "ok": true}'
+    assert refine_spans(text, []) == [DetectedSpan(text=value, category="secret")]
+
+
+def test_keyed_long_rule_skips_hash_keys_short_values_and_covered_spans():
+    sha = "ab12" * 10
+    short = _long(30)
+    covered = _long(48)
+    text = '{"commit_id": "' + sha + '", "digestId": "' + sha + '", "id": "' + short + '", "tokenId": "' + covered + '"}'
+    existing = [DetectedSpan(text=covered, category="secret")]
+    assert refine_spans(text, existing) == existing
+
+
+def test_hex_value_under_a_plain_id_key_is_a_secret():
+    value = "9f3c" * 16
+    text = '{"id": "' + value + '"}'
+    assert refine_spans(text, []) == [DetectedSpan(text=value, category="secret")]

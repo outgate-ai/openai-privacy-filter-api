@@ -95,15 +95,37 @@ def is_pod_name(text: str) -> bool:
     return _POD_NAME.match(text) is not None
 
 
+# A long opaque value under a JSON id key ("token_id": "<40+ base64/hex chars>")
+# is a credential the model never tags (opf-bench dev: 41 such gold secrets,
+# 13 % of v22's leaked characters, 3 look-alikes; hex values included, gold
+# labels those credentials too). A key that names a hash (commit_id, sha_id,
+# digestId) holds a commit or content hash, not a credential.
+_KEYED_LONG = re.compile(r'"([a-z]+[A-Z][A-Za-z]*Id|[a-z_]*_id|id)"\s*:\s*"([A-Za-z0-9_\-+/=]{40,})"')
+_HASH_KEY = re.compile(r"commit|sha|hash|digest|checksum|revision|etag", re.I)
+
+
+def keyed_long_secrets(text: str, taken: list[tuple[int, int]]) -> list[DetectedSpan]:
+    """Secrets for long opaque values under id keys that no detection touches."""
+    out = []
+    for m in _KEYED_LONG.finditer(text):
+        a, b = m.span(2)
+        if _HASH_KEY.search(m.group(1)) or any(s < b and a < e for s, e in taken):
+            continue
+        out.append(DetectedSpan(text=m.group(2), category="secret"))
+    return out
+
+
 def refine_spans(text: str, spans: list[DetectedSpan]) -> list[DetectedSpan]:
     """Context rules on raw model spans, before any merging.
 
     A ``secret`` that is the stem of a word-like file name is dropped; a
     ``secret`` shaped like a Kubernetes pod name is an identifier, not a
     credential, and is relabelled ``entity_id`` (still anonymized under
-    sensitive_data).
+    sensitive_data). Long opaque values under JSON id keys that nothing
+    covers are added as ``secret``.
     """
     out: list[DetectedSpan] = []
+    taken: list[tuple[int, int]] = []
     cursor = 0
     for span in spans:
         start = text.find(span.text, cursor)
@@ -112,12 +134,13 @@ def refine_spans(text: str, spans: list[DetectedSpan]) -> list[DetectedSpan]:
         end = start + len(span.text) if start >= 0 else -1
         if start >= 0:
             cursor = start
+            taken.append((start, end))
         if span.category == "secret" and end >= 0 and is_file_stem_secret(text, span.text, end):
             continue
         if span.category == "secret" and is_pod_name(span.text):
             span = DetectedSpan(text=span.text, category="entity_id")
         out.append(span)
-    return out
+    return out + keyed_long_secrets(text, taken)
 
 
 def _carries_no_structure(source_category: str, text: str) -> bool:
