@@ -46,6 +46,12 @@ Needs the `onnx` extra (`pip install ".[onnx]"`, included in the CPU image).
 | `OPF_API_BACKEND` | `torch` | `onnx` serves a released model's ONNX export on CPU. |
 | `OPF_API_ONNX_THREADS` | `0` | intra-op threads; 0 lets onnxruntime use the physical cores. |
 
+## Opt-in precision rules
+
+| Variable | Default | Effect |
+|---|---|---|
+| `OPF_API_ISO_DATES_AS_TIMESTAMP` | `false` | A `private_date` that is a bare `YYYY-MM-DD` without a birth cue (birth, dob, born, geboren) becomes `timestamp`. opf-bench dev: exact precision +0.018, F1 +0.013, but 11-13 real personal dates move to sensitive_data. Turn on only where sensitive_data is enabled with anonymization, or those dates go unmasked. |
+
 ## Shadow model (live comparison)
 
 A second checkpoint can score every scanned text next to the serving model, to

@@ -280,13 +280,15 @@ def test_long_or_non_hex_prefixed_tokens_stay_secrets(value):
 def test_bare_iso_date_is_a_timestamp(prefix):
     value = "20" + "26-11-08"
     text = prefix + value + " ok"
-    assert refine_spans(text, [DetectedSpan(text=value, category="private_date")]) == [DetectedSpan(text=value, category="timestamp")]
+    spans = [DetectedSpan(text=value, category="private_date")]
+    assert refine_spans(text, spans, iso_dates_as_timestamp=True) == [DetectedSpan(text=value, category="timestamp")]
+    assert refine_spans(text, spans) == spans
 
 
 @pytest.mark.parametrize("prefix", ["date of birth: ", "DOB ", "born on ", "geboren am "])
 def test_iso_date_after_a_birth_cue_stays_private(prefix):
     span = DetectedSpan(text="19" + "84-02-29", category="private_date")
-    assert refine_spans(prefix + span.text, [span]) == [span]
+    assert refine_spans(prefix + span.text, [span], iso_dates_as_timestamp=True) == [span]
 
 
 @pytest.mark.parametrize("value", ["08.11.2026", "Nov 8, 2026", "2026-13-01", "2026-11-08 trip", "1884-02-03"])

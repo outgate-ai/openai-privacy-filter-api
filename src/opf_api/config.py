@@ -116,6 +116,7 @@ class Config:
     shadow_label: str | None = None
     backend: str = "torch"
     shadow_backend: str | None = None
+    iso_dates_as_timestamp: bool = False
     onnx_threads: int = 0
 
     @classmethod
@@ -169,6 +170,7 @@ class Config:
             shadow_label=os.environ.get("OPF_API_SHADOW_MODEL_RESOLVED") or None,
             backend=_env_choice("OPF_API_BACKEND", BACKENDS, "torch"),
             shadow_backend=os.environ.get("OPF_API_SHADOW_BACKEND") or None,
+            iso_dates_as_timestamp=_env_bool("OPF_API_ISO_DATES_AS_TIMESTAMP", default=False),
             onnx_threads=_env_int("OPF_API_ONNX_THREADS", 0),
         )
 
@@ -273,6 +275,7 @@ class Config:
             shadow_label=self.shadow_label,
             backend=self.backend,
             shadow_backend=self.shadow_backend,
+            iso_dates_as_timestamp=self.iso_dates_as_timestamp,
             onnx_threads=self.onnx_threads,
         )
 

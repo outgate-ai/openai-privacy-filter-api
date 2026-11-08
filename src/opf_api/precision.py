@@ -140,7 +140,9 @@ def keyed_long_secrets(text: str, taken: list[tuple[int, int]]) -> list[Detected
     return out
 
 
-def refine_spans(text: str, spans: list[DetectedSpan]) -> list[DetectedSpan]:
+def refine_spans(
+    text: str, spans: list[DetectedSpan], *, iso_dates_as_timestamp: bool = False
+) -> list[DetectedSpan]:
     """Context rules on raw model spans, before any merging.
 
     A ``secret`` that is the stem of a word-like file name is dropped; a
@@ -148,7 +150,8 @@ def refine_spans(text: str, spans: list[DetectedSpan]) -> list[DetectedSpan]:
     credential, and is relabelled ``entity_id`` (still anonymized under
     sensitive_data), as is a prefixed short hex id (``run_<12 hex>``). A
     ``private_date`` that is a bare ISO date without a birth cue becomes
-    ``timestamp``. Long opaque values under JSON id keys that nothing covers
+    ``timestamp`` when ``iso_dates_as_timestamp`` is on (opt-in: it moves a few
+    real personal dates into sensitive_data, which a policy may have disabled). Long opaque values under JSON id keys that nothing covers
     are added as ``secret``.
     """
     out: list[DetectedSpan] = []
@@ -166,7 +169,12 @@ def refine_spans(text: str, spans: list[DetectedSpan]) -> list[DetectedSpan]:
             continue
         if span.category == "secret" and (is_pod_name(span.text) or is_prefixed_hex_id(span.text)):
             span = DetectedSpan(text=span.text, category="entity_id")
-        if span.category == "private_date" and start >= 0 and is_machine_iso_date(text, span.text, start):
+        if (
+            iso_dates_as_timestamp
+            and span.category == "private_date"
+            and start >= 0
+            and is_machine_iso_date(text, span.text, start)
+        ):
             span = DetectedSpan(text=span.text, category="timestamp")
         out.append(span)
     return out + keyed_long_secrets(text, taken)
