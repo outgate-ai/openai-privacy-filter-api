@@ -117,6 +117,7 @@ class Config:
     backend: str = "torch"
     shadow_backend: str | None = None
     iso_dates_as_timestamp: bool = False
+    digit_runs_as_entity_id: bool = False
     onnx_threads: int = 0
 
     @classmethod
@@ -171,6 +172,7 @@ class Config:
             backend=_env_choice("OPF_API_BACKEND", BACKENDS, "torch"),
             shadow_backend=os.environ.get("OPF_API_SHADOW_BACKEND") or None,
             iso_dates_as_timestamp=_env_bool("OPF_API_ISO_DATES_AS_TIMESTAMP", default=False),
+            digit_runs_as_entity_id=_env_bool("OPF_API_DIGIT_RUNS_AS_ENTITY_ID", default=False),
             onnx_threads=_env_int("OPF_API_ONNX_THREADS", 0),
         )
 
@@ -276,6 +278,7 @@ class Config:
             backend=self.backend,
             shadow_backend=self.shadow_backend,
             iso_dates_as_timestamp=self.iso_dates_as_timestamp,
+            digit_runs_as_entity_id=self.digit_runs_as_entity_id,
             onnx_threads=self.onnx_threads,
         )
 

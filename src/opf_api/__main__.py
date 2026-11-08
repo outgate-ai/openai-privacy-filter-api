@@ -243,6 +243,7 @@ def main(argv: list[str] | None = None) -> int:
         noisy_categories=cfg.noisy_categories,
         idle_release_seconds=cfg.idle_release_seconds,
         iso_dates_as_timestamp=cfg.iso_dates_as_timestamp,
+        digit_runs_as_entity_id=cfg.digit_runs_as_entity_id,
         shadow_engine=shadow_engine,
         shadow_label=cfg.shadow_label or "shadow",
         primary_label=os.environ.get("OPF_API_MODEL_RESOLVED") or "opf-v0-baseline",

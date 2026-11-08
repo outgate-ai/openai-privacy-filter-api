@@ -186,6 +186,7 @@ def create_app(
     noisy_categories: tuple[str, ...] = DEFAULT_NOISY_CATEGORIES,
     idle_release_seconds: float = 300,
     iso_dates_as_timestamp: bool = False,
+    digit_runs_as_entity_id: bool = False,
     shadow_engine: Engine | None = None,
     shadow_label: str = "shadow",
     primary_label: str = "primary",
@@ -291,7 +292,12 @@ def create_app(
         if shadow is not None:
             shadow.submit(request_id, text, spans)
         if precision_filters:
-            spans = refine_spans(text, spans, iso_dates_as_timestamp=iso_dates_as_timestamp)
+            spans = refine_spans(
+                text,
+                spans,
+                iso_dates_as_timestamp=iso_dates_as_timestamp,
+                digit_runs_as_entity_id=digit_runs_as_entity_id,
+            )
         if presidio_client is None:
             return [
                 {

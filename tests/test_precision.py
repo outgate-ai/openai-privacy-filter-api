@@ -295,3 +295,16 @@ def test_iso_date_after_a_birth_cue_stays_private(prefix):
 def test_other_date_shapes_stay_private(value):
     span = DetectedSpan(text=value, category="private_date")
     assert refine_spans("on " + value, [span]) == [span]
+
+@pytest.mark.parametrize("value", ["1731" + "065432", "4242", "17310654" + "32123", "4000" + "0000" + "0000" + "0001"])
+def test_bare_digit_run_account_is_an_identifier(value):
+    text = '{"id": ' + value + "}"
+    spans = [DetectedSpan(text=value, category="account_number")]
+    assert refine_spans(text, spans, digit_runs_as_entity_id=True) == [DetectedSpan(text=value, category="entity_id")]
+    assert refine_spans(text, spans) == spans
+
+
+@pytest.mark.parametrize("value", ["4242" * 4, "3782" + "822463" + "10005", "DE89" + "3704" + "0044" + "0532" + "0130" + "00", "12-34-56"])
+def test_card_numbers_and_non_digit_accounts_stay_accounts(value):
+    span = DetectedSpan(text=value, category="account_number")
+    assert refine_spans("card " + value, [span], digit_runs_as_entity_id=True) == [span]
