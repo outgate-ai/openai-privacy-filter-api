@@ -195,10 +195,10 @@ def main(argv: list[str] | None = None) -> int:
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
 
-    def onnx_or_none(path: str | None):
+    def onnx_or_none(path: str | None, backend: str = cfg.backend):
         # The ONNX backend needs a released model's onnx/ + card/; the upstream
         # baseline only ships the torch checkpoint, so it stays on torch.
-        if cfg.backend != "onnx":
+        if backend != "onnx":
             return None
         if is_onnx_model_dir(path):
             return ONNXEngine(model_dir=path, threads=cfg.onnx_threads)
@@ -210,7 +210,9 @@ def main(argv: list[str] | None = None) -> int:
     engine = onnx_or_none(cfg.model_path)
     shadow_engine = None
     if cfg.shadow_label or cfg.shadow_model_path:
-        shadow_engine = onnx_or_none(cfg.shadow_model_path) or OPFEngine(
+        # OPF_API_SHADOW_BACKEND=onnx keeps the shadow on CPU so it never competes
+        # with the serving model (or anything else) for GPU memory.
+        shadow_engine = onnx_or_none(cfg.shadow_model_path, cfg.shadow_backend or cfg.backend) or OPFEngine(
             device=cfg.device,
             model_path=cfg.shadow_model_path,
             context_window_length=cfg.context_window_length,

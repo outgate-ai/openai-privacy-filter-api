@@ -59,7 +59,7 @@ COPY pyproject.toml README.md LICENSE ./
 # This is the only layer that re-pushes on a typical code-change release;
 # it should be a few MB at most.
 COPY src ./src
-RUN python -m pip install .
+RUN python -m pip install ".[onnx]"
 
 WORKDIR /home/opf
 

@@ -71,3 +71,24 @@ def test_fetcher_pulls_onnx_and_card_and_exports_the_model_dir(tmp_path, monkeyp
     out = capsys.readouterr().out
     assert f"export OPF_API_MODEL_PATH={tmp_path / 'models' / 'opf-v22-x'}" in out
     assert "OPF_API_VITERBI_CALIBRATION_PATH" not in out
+
+
+def test_shadow_backend_fetches_onnx_even_when_serving_on_torch(tmp_path, monkeypatch, capsys):
+    m = _fetcher()
+    calls = {}
+
+    def fake_resolve(**kw):
+        calls.update(kw)
+        cache = tmp_path / "models" / "opf-v23-x"
+        cache.mkdir(parents=True)
+        (cache / "manifest.json").write_text(json.dumps({"runtime": {"dir": "runtime"}, "files": []}))
+        return "opf-v23-x", cache
+
+    monkeypatch.setattr(m, "resolve_and_fetch", fake_resolve)
+    monkeypatch.delenv("OPF_API_BACKEND", raising=False)
+    monkeypatch.setenv("OPF_API_SHADOW_BACKEND", "onnx")
+    monkeypatch.setenv("OPF_API_SHADOW_MODEL_CHANNEL", "candidate")
+    assert m.main(["fetch", "--shadow", "--exports", "--home", str(tmp_path)]) == 0
+    assert calls["include"] == ("onnx/", "card/")
+    out = capsys.readouterr().out
+    assert f"export OPF_API_SHADOW_MODEL_PATH={tmp_path / 'models' / 'opf-v23-x'}" in out

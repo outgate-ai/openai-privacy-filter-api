@@ -417,7 +417,8 @@ def cmd_fetch(args) -> int:
     region = os.environ.get("OPF_MODELS_REGION", DEFAULT_REGION)
     # The ONNX backend serves onnx/ with card/ (labels, tokenizer, calibration);
     # it never needs the 2.8 GB torch checkpoint.
-    onnx = os.environ.get("OPF_API_BACKEND", "").lower() == "onnx"
+    backend = os.environ.get("OPF_API_SHADOW_BACKEND") if args.shadow else None
+    onnx = (backend or os.environ.get("OPF_API_BACKEND", "")).lower() == "onnx"
     include = tuple(args.include or (["onnx/", "card/"] if onnx else ["runtime/"]))
     if not model_id and not channel:
         return 0

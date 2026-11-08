@@ -62,9 +62,11 @@ running totals.
 | `OPF_API_SHADOW_MODEL_CHANNEL` | unset | Resolve the shadow from a release channel instead. |
 | `OPF_API_SHADOW_MODEL_PATH` | unset | Local checkpoint for the shadow; wins over the two above. |
 | `OPF_API_SHADOW_VITERBI_CALIBRATION_PATH` | unset | Its Viterbi calibration. |
+| `OPF_API_SHADOW_BACKEND` | `OPF_API_BACKEND` | `onnx` runs a released shadow model on CPU (q4f16 export) while serving stays on the GPU, so the shadow never takes GPU memory. |
 
-The shadow needs its own GPU memory (about the size of the checkpoint) and roughly
-doubles GPU work per scan; leave it unset in normal operation.
+On the torch backend the shadow needs its own GPU memory (about the size of the checkpoint) and
+roughly doubles GPU work per scan; on a GPU shared with other jobs that can run serving out of
+memory. Prefer `OPF_API_SHADOW_BACKEND=onnx` (CPU, ~400 MiB RAM). Leave it unset in normal operation.
 
 ## Input preprocessing
 
