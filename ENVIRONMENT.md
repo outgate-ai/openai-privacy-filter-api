@@ -33,6 +33,19 @@ Released 41-label models add two labels on top of the 8 OPF categories: `entity_
 
 To roll back, unset `OPF_API_MODEL_ID`/`OPF_API_MODEL_CHANNEL` (or set `OPF_API_MODEL_ID=opf-v0-baseline`) and recreate the container.
 
+## CPU backend (ONNX)
+
+Released models also ship a q4f16 ONNX export (`onnx/`, about 160 MB for v22, ~100 ms per 512 tokens on 4
+CPU threads). With `OPF_API_BACKEND=onnx` the fetcher downloads `onnx/` and `card/` instead of the torch
+checkpoint, and opf-api serves it on onnxruntime's CPU provider with the gate's span pipeline (the decode
+opf-bench scores, so model-card numbers apply). The upstream baseline has no ONNX release and stays on torch.
+Needs the `onnx` extra (`pip install ".[onnx]"`, included in the CPU image).
+
+| Variable | Default | Effect |
+|---|---|---|
+| `OPF_API_BACKEND` | `torch` | `onnx` serves a released model's ONNX export on CPU. |
+| `OPF_API_ONNX_THREADS` | `0` | intra-op threads; 0 lets onnxruntime use the physical cores. |
+
 ## Shadow model (live comparison)
 
 A second checkpoint can score every scanned text next to the serving model, to

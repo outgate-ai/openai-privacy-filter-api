@@ -20,6 +20,7 @@ PRESIDIO_SCORE_THRESHOLD_DEFAULT = 0.5
 
 OUTPUT_MODES = ("typed", "redacted")
 DECODE_MODES = ("viterbi", "argmax")
+BACKENDS = ("torch", "onnx")
 
 
 def _env_str(key: str, default: str) -> str:
@@ -113,6 +114,8 @@ class Config:
     shadow_model_path: str | None = None
     shadow_viterbi_calibration_path: str | None = None
     shadow_label: str | None = None
+    backend: str = "torch"
+    onnx_threads: int = 0
 
     @classmethod
     def from_env(cls) -> Config:
@@ -163,6 +166,8 @@ class Config:
             )
             or None,
             shadow_label=os.environ.get("OPF_API_SHADOW_MODEL_RESOLVED") or None,
+            backend=_env_choice("OPF_API_BACKEND", BACKENDS, "torch"),
+            onnx_threads=_env_int("OPF_API_ONNX_THREADS", 0),
         )
 
     def override(
@@ -264,6 +269,8 @@ class Config:
             shadow_model_path=self.shadow_model_path,
             shadow_viterbi_calibration_path=self.shadow_viterbi_calibration_path,
             shadow_label=self.shadow_label,
+            backend=self.backend,
+            onnx_threads=self.onnx_threads,
         )
 
 

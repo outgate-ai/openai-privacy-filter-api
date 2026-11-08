@@ -15,6 +15,7 @@ import uvicorn
 
 from .config import Config
 from .engine import OPFEngine
+from .onnx_engine import ONNXEngine, is_onnx_model_dir
 from .server import create_app
 
 
@@ -194,9 +195,22 @@ def main(argv: list[str] | None = None) -> int:
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
 
+    def onnx_or_none(path: str | None):
+        # The ONNX backend needs a released model's onnx/ + card/; the upstream
+        # baseline only ships the torch checkpoint, so it stays on torch.
+        if cfg.backend != "onnx":
+            return None
+        if is_onnx_model_dir(path):
+            return ONNXEngine(model_dir=path, threads=cfg.onnx_threads)
+        logging.getLogger("opf_api").warning(
+            "OPF_API_BACKEND=onnx but %s has no ONNX export; using the torch engine", path or "the baseline"
+        )
+        return None
+
+    engine = onnx_or_none(cfg.model_path)
     shadow_engine = None
     if cfg.shadow_label or cfg.shadow_model_path:
-        shadow_engine = OPFEngine(
+        shadow_engine = onnx_or_none(cfg.shadow_model_path) or OPFEngine(
             device=cfg.device,
             model_path=cfg.shadow_model_path,
             context_window_length=cfg.context_window_length,
@@ -206,6 +220,7 @@ def main(argv: list[str] | None = None) -> int:
         )
 
     app = create_app(
+        engine=engine,
         device=cfg.device,
         model_path=cfg.model_path,
         model_name=cfg.model_name,

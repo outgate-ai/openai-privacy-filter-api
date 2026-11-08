@@ -36,7 +36,7 @@ COPY pyproject.toml README.md LICENSE ./
 # --- Layer 5: application source + project pip install. Only this
 # layer re-pushes on a typical code-change release.
 COPY src ./src
-RUN pip install .
+RUN pip install ".[onnx]"
 
 WORKDIR /home/opf
 

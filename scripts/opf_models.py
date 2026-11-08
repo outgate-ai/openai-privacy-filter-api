@@ -415,7 +415,10 @@ def cmd_fetch(args) -> int:
     bucket = os.environ.get("OPF_MODELS_BUCKET", DEFAULT_BUCKET)
     prefix = os.environ.get("OPF_MODELS_PREFIX", DEFAULT_PREFIX).strip("/")
     region = os.environ.get("OPF_MODELS_REGION", DEFAULT_REGION)
-    include = tuple(args.include or ["runtime/"])
+    # The ONNX backend serves onnx/ with card/ (labels, tokenizer, calibration);
+    # it never needs the 2.8 GB torch checkpoint.
+    onnx = os.environ.get("OPF_API_BACKEND", "").lower() == "onnx"
+    include = tuple(args.include or (["onnx/", "card/"] if onnx else ["runtime/"]))
     if not model_id and not channel:
         return 0
     try:
@@ -437,7 +440,8 @@ def cmd_fetch(args) -> int:
             print(f"{'export ' if args.exports else ''}OPF_API_SHADOW_MODEL_RESOLVED=opf-v0-baseline")
         return 0
     rid, cache = result
-    for k, v in exports_for(rid, cache).items():
+    exports = {"OPF_API_MODEL_PATH": str(cache), "OPF_API_MODEL_RESOLVED": rid} if onnx else exports_for(rid, cache)
+    for k, v in exports.items():
         if args.shadow:
             k = k.replace("OPF_API_", "OPF_API_SHADOW_", 1)
         print(f"{'export ' if args.exports else ''}{k}={shlex.quote(v)}")

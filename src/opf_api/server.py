@@ -248,7 +248,7 @@ def create_app(
 
     @asynccontextmanager
     async def lifespan(_: FastAPI):
-        if owned_engine:
+        if owned_engine or engine.state == "unloaded":
             engine.load()
         if shadow is not None:
             try:
