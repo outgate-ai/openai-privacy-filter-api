@@ -46,6 +46,24 @@ def is_bare_word_secret(text: str) -> bool:
     return text.isalpha() and len(text) <= BARE_WORD_MAX_LEN
 
 
+# A word right after a credential key (``password = "sunshine"``) is the
+# credential, however low its entropy: on CredData 223 of 240 such bare-word
+# secrets are gold. Those are kept.
+_CREDENTIAL_KEY = re.compile(
+    r"(?:pass(?:word|wd|phrase)?|pwd|secret|token|api[_-]?key|apikey|auth[_-]?key|credentials?|private[_-]?key|key)"
+    r"[\w.-]{0,20}[\"']?\s*(?:[:=]|==|=>|:=)\s*[\"'`]?$",
+    re.I,
+)
+_CREDENTIAL_KEY_WINDOW = 40
+
+
+def is_dropped_bare_word(text: str, value: str, start: int) -> bool:
+    """A bare-word ``secret`` that no credential key introduces."""
+    if not is_bare_word_secret(value):
+        return False
+    return start < 0 or not _CREDENTIAL_KEY.search(text[max(0, start - _CREDENTIAL_KEY_WINDOW) : start])
+
+
 
 FILE_EXTENSIONS = frozenset(
     ["onnx", "onnx_data", "safetensors", "bin", "pt", "pth", "ckpt", "gguf", "h5", "npz", "npy", "json", "jsonl", "yaml", "yml", "toml", "lock", "log", "txt", "md", "csv", "tsv", "tar", "gz", "tgz", "zip", "whl", "so", "dylib", "dll", "py", "js", "ts", "go", "rs", "java"]
@@ -208,8 +226,9 @@ def refine_spans(
 ) -> list[DetectedSpan]:
     """Context rules on raw model spans, before any merging.
 
-    A ``secret`` that is the stem of a word-like file name is dropped, and so
-    is a ``private_person`` that is just an AI product name (Claude, Qwen); a
+    A ``secret`` that is the stem of a word-like file name is dropped, as is a
+    bare-word ``secret`` that no credential key introduces, and a
+    ``private_person`` that is just an AI product name (Claude, Qwen); a
     ``private_email`` cut short inside an address is replaced by the whole
     address (kept too if its text occurs elsewhere); a ``secret`` shaped like a Kubernetes pod name is an identifier, not a
     credential, and is relabelled ``entity_id`` (still anonymized under
@@ -235,6 +254,8 @@ def refine_spans(
             cursor = start
             taken.append((start, end))
         if span.category == "secret" and end >= 0 and is_file_stem_secret(text, span.text, end):
+            continue
+        if span.category == "secret" and is_dropped_bare_word(text, span.text, start):
             continue
         if span.category == "private_email" and start >= 0:
             lo, hi = widen_email(text, start, end)
@@ -298,9 +319,6 @@ def apply_precision_filters(
             and _carries_no_structure(det.source_category, det.text)
         ):
             dropped.append((det.source_category, "uncorroborated"))
-            continue
-        if det.source_category == "secret" and is_bare_word_secret(det.text):
-            dropped.append((det.source_category, "bare-word"))
             continue
         if det.source_category == "secret" and is_file_name_secret(det.text):
             dropped.append((det.source_category, "file-name"))

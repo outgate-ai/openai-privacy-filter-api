@@ -37,7 +37,6 @@ from .models import (
 from .precision import (
     DEFAULT_NOISY_CATEGORIES,
     apply_precision_filters,
-    is_bare_word_secret,
     is_file_name_secret,
     refine_spans,
 )
@@ -310,7 +309,7 @@ def create_app(
                 and not (
                     precision_filters
                     and span.category == "secret"
-                    and (is_bare_word_secret(span.text) or is_file_name_secret(span.text))
+                    and is_file_name_secret(span.text)
                 )
             ]
 

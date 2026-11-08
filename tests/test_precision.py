@@ -52,17 +52,31 @@ def test_real_secret_shapes_survive(value):
 
 
 def test_bare_word_secret_is_dropped_but_a_real_one_is_kept():
-    dets = [
-        MergedDetection("outgate", "credentials", "secret", SOURCE_OPF),
-        MergedDetection("xK9mPass22aa", "credentials", "secret", SOURCE_OPF),
-    ]
-    kept = _filter(dets)
-    assert [d.text for d in kept] == ["xK9mPass22aa"]
+    real = "xK9m" + "Pass" + "22aa"
+    text = "clone outgate with " + real
+    spans = [DetectedSpan(text="outgate", category="secret"), DetectedSpan(text=real, category="secret")]
+    assert [s.text for s in refine_spans(text, spans)] == [real]
 
 
-def test_bare_word_rule_applies_even_without_corroboration():
+@pytest.mark.parametrize(
+    "prefix",
+    ['password = "', "db_pass" + "word: ", "API_KEY=", "'token': '", "secret => '", "authKey := `"],
+)
+def test_bare_word_after_a_credential_key_is_kept(prefix):
+    word = "sun" + "shine"
+    span = DetectedSpan(text=word, category="secret")
+    assert refine_spans(prefix + word + '"', [span]) == [span]
+
+
+@pytest.mark.parametrize("prefix", ["clone the ", "user: ", "name = '", "the password policy says "])
+def test_bare_word_without_a_credential_key_is_dropped(prefix):
+    word = "sun" + "shine"
+    assert refine_spans(prefix + word, [DetectedSpan(text=word, category="secret")]) == []
+
+
+def test_bare_word_filter_runs_in_refine_spans_not_the_merged_filter():
     dets = [MergedDetection("outgate", "credentials", "secret", SOURCE_OPF)]
-    assert _filter(dets, corroborated=False) == []
+    assert _filter(dets, corroborated=False) == dets
 
 
 # -------------------------------------------------- uncorroborated noise
@@ -323,8 +337,8 @@ def test_people_and_other_spellings_stay_persons(value):
 
 
 def test_product_name_under_another_label_is_untouched():
-    span = DetectedSpan(text="Claude", category="secret")
-    assert refine_spans("key Claude", [span]) == [span]
+    span = DetectedSpan(text="Claude", category="private_address")
+    assert refine_spans("at Claude", [span]) == [span]
 
 
 @pytest.mark.parametrize("value", ["9f3c2a1", "0c1d2e3f4a5b", "3f2a" * 2 + "-" + "9e1d-4c2b-8a7f-" + "0b1c" * 3])
