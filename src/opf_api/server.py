@@ -39,6 +39,7 @@ from .precision import (
     apply_precision_filters,
     is_bare_word_secret,
     is_file_name_secret,
+    refine_spans,
 )
 from .preprocess import normalize_whitespace
 from .presidio import DEFAULT_ENTITIES, PresidioClient, map_entity
@@ -288,6 +289,8 @@ def create_app(
         spans = engine.redact(text)
         if shadow is not None:
             shadow.submit(request_id, text, spans)
+        if precision_filters:
+            spans = refine_spans(text, spans)
         if presidio_client is None:
             return [
                 {

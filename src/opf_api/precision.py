@@ -28,6 +28,7 @@ from __future__ import annotations
 import logging
 import re
 
+from .engine import DetectedSpan
 from .merge import SOURCE_OPF, MergedDetection
 
 logger = logging.getLogger(__name__)
@@ -71,6 +72,52 @@ def is_file_name_secret(text: str) -> bool:
         if not (part.isalpha() or part.isdigit()) and len(part) > 8:
             return False
     return True
+
+
+_EXT_AFTER = re.compile(r"\.[A-Za-z0-9_]{1,12}")
+
+# Kubernetes pod names: <workload>-<replicaset hash>-<5-char suffix>, both drawn
+# from the vowel-free alphabet the controllers use, so words never match.
+_K8S_ALPHABET = "bcdfghjklmnpqrstvwxz2456789"
+_POD_NAME = re.compile(
+    rf"^[a-z][a-z0-9]*(?:-[a-z0-9]+)*-[{_K8S_ALPHABET}]{{6,10}}-[{_K8S_ALPHABET}]{{5}}$"
+)
+
+
+def is_file_stem_secret(text: str, value: str, end: int) -> bool:
+    """True when ``value`` ends right before a file extension in ``text`` and the
+    whole thing is a word-like file name (the model often stops at the dot)."""
+    m = _EXT_AFTER.match(text, end)
+    return bool(m) and "://" not in value and "@" not in value and is_file_name_secret(value + m.group())
+
+
+def is_pod_name(text: str) -> bool:
+    return _POD_NAME.match(text) is not None
+
+
+def refine_spans(text: str, spans: list[DetectedSpan]) -> list[DetectedSpan]:
+    """Context rules on raw model spans, before any merging.
+
+    A ``secret`` that is the stem of a word-like file name is dropped; a
+    ``secret`` shaped like a Kubernetes pod name is an identifier, not a
+    credential, and is relabelled ``entity_id`` (still anonymized under
+    sensitive_data).
+    """
+    out: list[DetectedSpan] = []
+    cursor = 0
+    for span in spans:
+        start = text.find(span.text, cursor)
+        if start < 0:
+            start = text.find(span.text)
+        end = start + len(span.text) if start >= 0 else -1
+        if start >= 0:
+            cursor = start
+        if span.category == "secret" and end >= 0 and is_file_stem_secret(text, span.text, end):
+            continue
+        if span.category == "secret" and is_pod_name(span.text):
+            span = DetectedSpan(text=span.text, category="entity_id")
+        out.append(span)
+    return out
 
 
 def _carries_no_structure(source_category: str, text: str) -> bool:

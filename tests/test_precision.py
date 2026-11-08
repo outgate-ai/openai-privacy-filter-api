@@ -14,6 +14,8 @@ from opf_api.precision import (
     apply_precision_filters,
     is_bare_word_secret,
     is_file_name_secret,
+    is_pod_name,
+    refine_spans,
 )
 from opf_api.presidio import DEFAULT_ENTITIES
 from opf_api.server import create_app
@@ -183,3 +185,39 @@ def test_artifact_file_names_are_not_secrets(name):
 )
 def test_key_shaped_or_non_file_values_are_not_file_names(value):
     assert not is_file_name_secret(value)
+
+
+# ------------------------------------- context rules on raw spans
+
+def test_secret_that_stops_at_the_extension_is_a_file_name():
+    text = "onnx/model_q4f16.onnx + weights"
+    spans = [DetectedSpan(text="onnx/model_q4f16", category="secret")]
+    assert refine_spans(text, spans) == []
+
+
+def test_url_before_an_extension_is_kept():
+    text = "get https://dl.example.org/pkg/release_notes.zip now"
+    spans = [DetectedSpan(text="https://dl.example.org/pkg/release_notes", category="secret")]
+    assert refine_spans(text, spans) == spans
+
+
+def test_pod_name_is_an_identifier_not_a_secret():
+    text = "kubectl logs guardrail-7d9f8b6c5-x2kqp -n outgate"
+    out = refine_spans(text, [DetectedSpan(text="guardrail-7d9f8b6c5-x2kqp", category="secret")])
+    assert out == [DetectedSpan(text="guardrail-7d9f8b6c5-x2kqp", category="entity_id")]
+
+
+@pytest.mark.parametrize("value", ["sk-live-abcdefghij-klmno", "api-xq7Zk9", "guardrail-7d9f8b6c5-x2kqpq"])
+def test_secret_shapes_are_not_pod_names(value):
+    assert not is_pod_name(value)
+
+
+def test_endpoint_applies_context_rules():
+    text = "Copied onnx/model_q4f16.onnx and restarted guardrail-7d9f8b6c5-x2kqp"
+    engine = FakeEngine(spans_by_input={text: [
+        DetectedSpan(text="onnx/model_q4f16", category="secret"),
+        DetectedSpan(text="guardrail-7d9f8b6c5-x2kqp", category="secret"),
+    ]})
+    client = TestClient(create_app(engine=engine, model_name="openai-privacy-filter"))
+    dets = _detections(_post(client, text))
+    assert [(d["source_category"], d["category"]) for d in dets] == [("entity_id", "sensitive_data")]
