@@ -106,7 +106,6 @@ def is_prefixed_hex_id(text: str) -> bool:
     return _PREFIXED_HEX_ID.match(text) is not None
 
 
-<<<<<<< HEAD
 # A bare ISO calendar date tagged ``private_date`` is almost always a machine
 # date (a release, a due date, a log day): on opf-bench dev 692 of 703 such
 # spans are outside gold. It is relabelled ``timestamp`` (still anonymized under
@@ -118,7 +117,8 @@ _BIRTH_WINDOW = 40
 
 def is_machine_iso_date(text: str, value: str, start: int) -> bool:
     return _ISO_DATE.match(value) is not None and not _BIRTH_CUE.search(text[max(0, start - _BIRTH_WINDOW) : start])
-=======
+
+
 # A bare run of digits tagged ``account_number`` is almost always a machine id
 # (a ticket, an epoch, a build or invoice number): on opf-bench dev 860 of 862
 # such spans are outside gold. Card numbers pass the Luhn check, so a 13-19
@@ -139,7 +139,6 @@ def _luhn_ok(digits: str) -> bool:
 def is_digit_run_id(text: str) -> bool:
     """True for a bare digit run that cannot be a payment card number."""
     return _DIGIT_RUN.match(text) is not None and not (13 <= len(text) <= 19 and _luhn_ok(text))
->>>>>>> origin/rules/digit-run-account
 
 
 # A long opaque value under a JSON id key ("token_id": "<40+ base64/hex chars>")
@@ -175,19 +174,14 @@ def refine_spans(
     A ``secret`` that is the stem of a word-like file name is dropped; a
     ``secret`` shaped like a Kubernetes pod name is an identifier, not a
     credential, and is relabelled ``entity_id`` (still anonymized under
-<<<<<<< HEAD
-    sensitive_data), as is a prefixed short hex id (``run_<12 hex>``). A
-    ``private_date`` that is a bare ISO date without a birth cue becomes
-    ``timestamp`` when ``iso_dates_as_timestamp`` is on (opt-in: it moves a few
-    real personal dates into sensitive_data, which a policy may have disabled). Long opaque values under JSON id keys that nothing covers
-    are added as ``secret``.
-=======
-    sensitive_data), as is a prefixed short hex id (``run_<12 hex>``) and an
-    ``account_number`` that is a bare digit run failing the card checksum
-    (opt-in, ``digit_runs_as_entity_id``). Long
-    opaque values under JSON id keys that nothing covers are added as
-    ``secret``.
->>>>>>> origin/rules/digit-run-account
+    sensitive_data), as is a prefixed short hex id (``run_<12 hex>``). Long
+    opaque values under JSON id keys that nothing covers are added as ``secret``.
+
+    Two opt-in rules move spans between masked categories, which a policy that
+    disables sensitive_data would unmask: ``iso_dates_as_timestamp`` (a bare ISO
+    ``private_date`` without a birth cue becomes ``timestamp``) and
+    ``digit_runs_as_entity_id`` (a bare digit-run ``account_number`` that fails
+    the card checksum becomes ``entity_id``).
     """
     out: list[DetectedSpan] = []
     taken: list[tuple[int, int]] = []
@@ -204,7 +198,6 @@ def refine_spans(
             continue
         if span.category == "secret" and (is_pod_name(span.text) or is_prefixed_hex_id(span.text)):
             span = DetectedSpan(text=span.text, category="entity_id")
-<<<<<<< HEAD
         if (
             iso_dates_as_timestamp
             and span.category == "private_date"
@@ -212,10 +205,8 @@ def refine_spans(
             and is_machine_iso_date(text, span.text, start)
         ):
             span = DetectedSpan(text=span.text, category="timestamp")
-=======
         if digit_runs_as_entity_id and span.category == "account_number" and is_digit_run_id(span.text):
             span = DetectedSpan(text=span.text, category="entity_id")
->>>>>>> origin/rules/digit-run-account
         out.append(span)
     return out + keyed_long_secrets(text, taken)
 
