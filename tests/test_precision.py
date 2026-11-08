@@ -275,7 +275,7 @@ def test_non_id_or_hash_camel_keys_are_not_keyed(key):
     assert refine_spans(text, []) == []
 
 
-@pytest.mark.parametrize("value", ["run" + "_" + "3f9a" * 3, "app" + "_" + "0c1d2e3f4a5b", "apc" + "_" + "9e" * 10, "ab" + "_" + "deadbeef"])
+@pytest.mark.parametrize("value", ["run" + "_" + "3f9a" * 3, "app" + "_" + "0c1d2e3f4a5b", "apc" + "_" + "9e" * 8, "ab" + "_" + "deadbeef"])
 def test_prefixed_short_hex_id_is_an_identifier_not_a_secret(value):
     text = "run_id: " + value + ", ok"
     assert refine_spans(text, [DetectedSpan(text=value, category="secret")]) == [DetectedSpan(text=value, category="entity_id")]
@@ -283,7 +283,7 @@ def test_prefixed_short_hex_id_is_an_identifier_not_a_secret(value):
 
 @pytest.mark.parametrize(
     "value",
-    ["og" + "hk_" + "a1b2" * 8, "sk" + "_" + "Live" + "9f3c" * 4, "run" + "_" + "3f9a", "Run" + "_" + "3f9a" * 3, "a" + "_" + "3f9a" * 3],
+    ["og" + "hk_" + "a1b2" * 8, "sk" + "_" + "Live" + "9f3c" * 4, "run" + "_" + "3f9a", "Run" + "_" + "3f9a" * 3, "a" + "_" + "3f9a" * 3, "apc" + "_" + "9e" * 10],
 )
 def test_long_or_non_hex_prefixed_tokens_stay_secrets(value):
     span = DetectedSpan(text=value, category="secret")

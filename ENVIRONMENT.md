@@ -51,7 +51,7 @@ Needs the `onnx` extra (`pip install ".[onnx]"`, included in the CPU image).
 | Variable | Default | Effect |
 |---|---|---|
 | `OPF_API_ISO_DATES_AS_TIMESTAMP` | `false` | A `private_date` that is a bare `YYYY-MM-DD` without a birth cue (birth, dob, born, geboren) becomes `timestamp`. opf-bench dev: exact precision +0.018, F1 +0.013, but 11-13 real personal dates move to sensitive_data. Turn on only where sensitive_data is enabled with anonymization, or those dates go unmasked. |
-| `OPF_API_DIGIT_RUNS_AS_ENTITY_ID` | `false` | An `account_number` that is a bare digit run, unless 13-19 digits and Luhn-valid (a card), becomes `entity_id`. Dev: exact precision +0.023, F1 +0.017, leak flat; 2 real account numbers move to sensitive_data. With the Presidio pass on, these digit runs used to be dropped as uncorroborated and now stay masked. Same condition as above. |
+| `OPF_API_DIGIT_RUNS_AS_ENTITY_ID` | `false` | An `account_number` that is a bare digit run, unless 13-19 digits and Luhn-valid (a card), becomes `entity_id`. Dev: exact precision +0.023, F1 +0.017, leak flat; 2 real account numbers move to sensitive_data. With the Presidio pass on, these digit runs used to be dropped as uncorroborated and now stay masked. **Unsafe on PII-dense text**: on Nemotron/SPY/Gretel it moves hundreds of real routing, account, medical-record, PIN, passport and SSN numbers to entity_id. Enable only where sensitive_data can never be disabled. |
 
 ## Shadow model (live comparison)
 

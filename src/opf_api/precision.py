@@ -105,8 +105,9 @@ _POD_NAME = re.compile(
 # Resource ids made of a short lowercase prefix and a short hex body (run_<12 hex>,
 # app_<12 hex>, apc_<20 hex>). The model tags them `secret`; on opf-bench dev all
 # 75 such spans are outside gold. Tokens with a 32-hex body under the same kind of
-# prefix are gold secrets, so the body length is capped.
-_PREFIXED_HEX_ID = re.compile(r"^[a-z]{2,10}_[0-9a-f]{8,20}$")
+# prefix are gold secrets, so the body length is capped (at 16: two review-set
+# credentials have a 20-hex body).
+_PREFIXED_HEX_ID = re.compile(r"^[a-z]{2,10}_[0-9a-f]{8,16}$")
 
 
 def is_file_stem_secret(text: str, value: str, end: int) -> bool:
