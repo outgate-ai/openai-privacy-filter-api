@@ -308,3 +308,20 @@ def test_bare_digit_run_account_is_an_identifier(value):
 def test_card_numbers_and_non_digit_accounts_stay_accounts(value):
     span = DetectedSpan(text=value, category="account_number")
     assert refine_spans("card " + value, [span], digit_runs_as_entity_id=True) == [span]
+
+
+@pytest.mark.parametrize("name", ["Claude", "Qwen", "Ollama", "Gemini"])
+def test_ai_product_name_is_not_a_person(name):
+    text = "ask " + name + " to review it"
+    assert refine_spans(text, [DetectedSpan(text=name, category="private_person")]) == []
+
+
+@pytest.mark.parametrize("value", ["Claude Monet", "Jules", "Alexa", "claude"])
+def test_people_and_other_spellings_stay_persons(value):
+    span = DetectedSpan(text=value, category="private_person")
+    assert refine_spans("met " + value + " today", [span]) == [span]
+
+
+def test_product_name_under_another_label_is_untouched():
+    span = DetectedSpan(text="Claude", category="secret")
+    assert refine_spans("key Claude", [span]) == [span]

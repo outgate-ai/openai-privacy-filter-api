@@ -141,6 +141,15 @@ def is_digit_run_id(text: str) -> bool:
     return _DIGIT_RUN.match(text) is not None and not (13 <= len(text) <= 19 and _luhn_ok(text))
 
 
+# Assistant and model product names the model reads as a first name ("ask
+# Claude", "pull Qwen"). On opf-bench dev 187 single-token person spans are one
+# of these, none in gold. Names that are also common first names (Jules, Devin,
+# Alexa) are left out.
+AI_PRODUCT_NAMES = frozenset(
+    ["Claude", "Codex", "Gemini", "Copilot", "ChatGPT", "Grok", "Bard", "Llama", "Ollama", "Mistral", "Qwen", "DeepSeek", "Kimi", "Perplexity", "Cortana"]
+)
+
+
 # A long opaque value under a JSON id key ("token_id": "<40+ base64/hex chars>")
 # is a credential the model never tags (opf-bench dev: 41 such gold secrets,
 # 13 % of v22's leaked characters, 3 look-alikes; hex values included, gold
@@ -171,7 +180,9 @@ def refine_spans(
 ) -> list[DetectedSpan]:
     """Context rules on raw model spans, before any merging.
 
-    A ``secret`` that is the stem of a word-like file name is dropped; a
+    A ``secret`` that is the stem of a word-like file name is dropped, and so
+    is a ``private_person`` that is just an AI product name; a
+    ``private_person`` that is just an AI product name (Claude, Qwen) is dropped; a
     ``secret`` shaped like a Kubernetes pod name is an identifier, not a
     credential, and is relabelled ``entity_id`` (still anonymized under
     sensitive_data), as is a prefixed short hex id (``run_<12 hex>``). Long
@@ -195,6 +206,8 @@ def refine_spans(
             cursor = start
             taken.append((start, end))
         if span.category == "secret" and end >= 0 and is_file_stem_secret(text, span.text, end):
+            continue
+        if span.category == "private_person" and span.text in AI_PRODUCT_NAMES:
             continue
         if span.category == "secret" and (is_pod_name(span.text) or is_prefixed_hex_id(span.text)):
             span = DetectedSpan(text=span.text, category="entity_id")
