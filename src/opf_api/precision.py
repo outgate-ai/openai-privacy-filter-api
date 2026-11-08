@@ -161,6 +161,23 @@ AI_PRODUCT_NAMES = frozenset(
 )
 
 
+# The model often stops an email inside the address (before the ``@domain`` or
+# the last label) when it sits in a path or next to punctuation. On opf-bench
+# dev ~70 gold addresses are cut short that way; the whole address is added as
+# a span, and the partial one stays only if its text also occurs elsewhere.
+_EMAIL = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}")
+
+
+def widen_email(text: str, start: int, end: int) -> tuple[int, int]:
+    """The ``[start, end)`` range widened to every email address it overlaps."""
+    lo, hi = start, end
+    for m in _EMAIL.finditer(text, max(0, start - 254), min(len(text), end + 254)):
+        a, b = m.span()
+        if a < end and start < b:
+            lo, hi = min(lo, a), max(hi, b)
+    return lo, hi
+
+
 # A long opaque value under a JSON id key ("token_id": "<40+ base64/hex chars>")
 # is a credential the model never tags (opf-bench dev: 41 such gold secrets,
 # 13 % of v22's leaked characters, 3 look-alikes; hex values included, gold
@@ -192,9 +209,9 @@ def refine_spans(
     """Context rules on raw model spans, before any merging.
 
     A ``secret`` that is the stem of a word-like file name is dropped, and so
-    is a ``private_person`` that is just an AI product name; a
-    ``private_person`` that is just an AI product name (Claude, Qwen) is dropped; a
-    ``secret`` shaped like a Kubernetes pod name is an identifier, not a
+    is a ``private_person`` that is just an AI product name (Claude, Qwen); a
+    ``private_email`` cut short inside an address is replaced by the whole
+    address (kept too if its text occurs elsewhere); a ``secret`` shaped like a Kubernetes pod name is an identifier, not a
     credential, and is relabelled ``entity_id`` (still anonymized under
     sensitive_data), as is a prefixed short hex id (``run_<12 hex>``). Long
     opaque values under JSON id keys that nothing covers are added as ``secret``.
@@ -207,6 +224,7 @@ def refine_spans(
     """
     out: list[DetectedSpan] = []
     taken: list[tuple[int, int]] = []
+    widened: dict[str, DetectedSpan] = {}
     cursor = 0
     for span in spans:
         start = text.find(span.text, cursor)
@@ -218,6 +236,15 @@ def refine_spans(
             taken.append((start, end))
         if span.category == "secret" and end >= 0 and is_file_stem_secret(text, span.text, end):
             continue
+        if span.category == "private_email" and start >= 0:
+            lo, hi = widen_email(text, start, end)
+            if (lo, hi) != (start, end):
+                address = text[lo:hi]
+                if address not in widened:
+                    widened[address] = DetectedSpan(text=address, category="private_email")
+                    taken.append((lo, hi))
+                if span.text not in text.replace(address, "\0"):
+                    continue
         if span.category == "private_person" and span.text in AI_PRODUCT_NAMES:
             continue
         if span.category == "secret" and (is_pod_name(span.text) or is_prefixed_hex_id(span.text)):
@@ -232,7 +259,7 @@ def refine_spans(
         if digit_runs_as_entity_id and span.category == "account_number" and is_digit_run_id(span.text):
             span = DetectedSpan(text=span.text, category="entity_id")
         out.append(span)
-    return out + keyed_long_secrets(text, taken)
+    return out + list(widened.values()) + keyed_long_secrets(text, taken)
 
 
 def _carries_no_structure(source_category: str, text: str) -> bool:

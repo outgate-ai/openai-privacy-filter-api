@@ -338,3 +338,33 @@ def test_uuid_and_short_hex_accounts_are_identifiers_when_opted_in(value):
 def test_long_or_letter_only_hex_accounts_stay_accounts(value):
     span = DetectedSpan(text=value, category="account_number")
     assert refine_spans("ref " + value, [span], digit_runs_as_entity_id=True) == [span]
+
+
+def _addr():
+    return "jo" + "." + "doe" + "@" + "mail-host" + "." + "example"
+
+
+@pytest.mark.parametrize("cut", [6, 16])
+def test_email_cut_short_gets_the_whole_address(cut):
+    addr = _addr()
+    text = "cd /workspace/" + addr + "/notes"
+    part = DetectedSpan(text=addr[:cut], category="private_email")
+    assert refine_spans(text, [part]) == [DetectedSpan(text=addr, category="private_email")]
+    elsewhere = text + " and " + addr[:cut] + " alone"
+    assert refine_spans(elsewhere, [part]) == [part, DetectedSpan(text=addr, category="private_email")]
+
+
+def test_two_pieces_of_one_address_become_one_span():
+    addr = _addr()
+    pieces = [DetectedSpan(text=addr[:6], category="private_email"), DetectedSpan(text=addr[7:], category="private_email")]
+    assert refine_spans("to " + addr, pieces) == [DetectedSpan(text=addr, category="private_email")]
+
+
+def test_whole_or_non_address_emails_are_unchanged():
+    addr = _addr()
+    whole = DetectedSpan(text=addr, category="private_email")
+    assert refine_spans("mail " + addr + " now", [whole]) == [whole]
+    handle = DetectedSpan(text="jo" + "doe", category="private_email")
+    assert refine_spans("user jodoe here", [handle]) == [handle]
+    person = DetectedSpan(text="jo", category="private_person")
+    assert refine_spans("to " + addr, [person]) == [person]
