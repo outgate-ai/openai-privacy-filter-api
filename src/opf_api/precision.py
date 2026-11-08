@@ -106,6 +106,19 @@ def is_prefixed_hex_id(text: str) -> bool:
     return _PREFIXED_HEX_ID.match(text) is not None
 
 
+# A bare ISO calendar date tagged ``private_date`` is almost always a machine
+# date (a release, a due date, a log day): on opf-bench dev 692 of 703 such
+# spans are outside gold. It is relabelled ``timestamp`` (still anonymized under
+# sensitive_data) unless a birth cue precedes it.
+_ISO_DATE = re.compile(r"^(?:19|20)\d{2}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])$")
+_BIRTH_CUE = re.compile(r"birth|\bdob\b|\bborn\b|geboren|\bgeb\.", re.I)
+_BIRTH_WINDOW = 40
+
+
+def is_machine_iso_date(text: str, value: str, start: int) -> bool:
+    return _ISO_DATE.match(value) is not None and not _BIRTH_CUE.search(text[max(0, start - _BIRTH_WINDOW) : start])
+
+
 # A long opaque value under a JSON id key ("token_id": "<40+ base64/hex chars>")
 # is a credential the model never tags (opf-bench dev: 41 such gold secrets,
 # 13 % of v22's leaked characters, 3 look-alikes; hex values included, gold
@@ -133,9 +146,10 @@ def refine_spans(text: str, spans: list[DetectedSpan]) -> list[DetectedSpan]:
     A ``secret`` that is the stem of a word-like file name is dropped; a
     ``secret`` shaped like a Kubernetes pod name is an identifier, not a
     credential, and is relabelled ``entity_id`` (still anonymized under
-    sensitive_data), as is a prefixed short hex id (``run_<12 hex>``). Long
-    opaque values under JSON id keys that nothing covers are added as
-    ``secret``.
+    sensitive_data), as is a prefixed short hex id (``run_<12 hex>``). A
+    ``private_date`` that is a bare ISO date without a birth cue becomes
+    ``timestamp``. Long opaque values under JSON id keys that nothing covers
+    are added as ``secret``.
     """
     out: list[DetectedSpan] = []
     taken: list[tuple[int, int]] = []
@@ -152,6 +166,8 @@ def refine_spans(text: str, spans: list[DetectedSpan]) -> list[DetectedSpan]:
             continue
         if span.category == "secret" and (is_pod_name(span.text) or is_prefixed_hex_id(span.text)):
             span = DetectedSpan(text=span.text, category="entity_id")
+        if span.category == "private_date" and start >= 0 and is_machine_iso_date(text, span.text, start):
+            span = DetectedSpan(text=span.text, category="timestamp")
         out.append(span)
     return out + keyed_long_secrets(text, taken)
 

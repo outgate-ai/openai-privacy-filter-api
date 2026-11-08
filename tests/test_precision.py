@@ -274,3 +274,22 @@ def test_prefixed_short_hex_id_is_an_identifier_not_a_secret(value):
 def test_long_or_non_hex_prefixed_tokens_stay_secrets(value):
     span = DetectedSpan(text=value, category="secret")
     assert refine_spans("key " + value, [span]) == [span]
+
+
+@pytest.mark.parametrize("prefix", ["released ", "due date: ", '{"created": "', "since "])
+def test_bare_iso_date_is_a_timestamp(prefix):
+    value = "20" + "26-11-08"
+    text = prefix + value + " ok"
+    assert refine_spans(text, [DetectedSpan(text=value, category="private_date")]) == [DetectedSpan(text=value, category="timestamp")]
+
+
+@pytest.mark.parametrize("prefix", ["date of birth: ", "DOB ", "born on ", "geboren am "])
+def test_iso_date_after_a_birth_cue_stays_private(prefix):
+    span = DetectedSpan(text="19" + "84-02-29", category="private_date")
+    assert refine_spans(prefix + span.text, [span]) == [span]
+
+
+@pytest.mark.parametrize("value", ["08.11.2026", "Nov 8, 2026", "2026-13-01", "2026-11-08 trip", "1884-02-03"])
+def test_other_date_shapes_stay_private(value):
+    span = DetectedSpan(text=value, category="private_date")
+    assert refine_spans("on " + value, [span]) == [span]
