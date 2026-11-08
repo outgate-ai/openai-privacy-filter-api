@@ -99,8 +99,9 @@ def is_pod_name(text: str) -> bool:
 # is a credential the model never tags (opf-bench dev: 41 such gold secrets,
 # 13 % of v22's leaked characters, 3 look-alikes; hex values included, gold
 # labels those credentials too). A key that names a hash (commit_id, sha_id,
-# digestId) holds a commit or content hash, not a credential.
-_KEYED_LONG = re.compile(r'"([a-z]+[A-Z][A-Za-z]*Id|[a-z_]*_id|id)"\s*:\s*"([A-Za-z0-9_\-+/=]{40,})"')
+# digestId) holds a commit or content hash, not a credential. camelCase keys
+# with a single hump (appId, userId) carry 41 more such gold secrets on dev.
+_KEYED_LONG = re.compile(r'"([a-z][a-z0-9]*(?:[A-Z][a-z0-9]*)*Id|[a-z_]*_id|id)"\s*:\s*"([A-Za-z0-9_\-+/=]{40,})"')
 _HASH_KEY = re.compile(r"commit|sha|hash|digest|checksum|revision|etag", re.I)
 
 

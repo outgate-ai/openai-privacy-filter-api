@@ -246,3 +246,16 @@ def test_hex_value_under_a_plain_id_key_is_a_secret():
     value = "9f3c" * 16
     text = '{"id": "' + value + '"}'
     assert refine_spans(text, []) == [DetectedSpan(text=value, category="secret")]
+
+
+@pytest.mark.parametrize("key", ["app" + "Id", "user" + "Id", "pipeline" + "Id", "parentRun" + "Id", "v2" + "Id"])
+def test_single_hump_camel_id_keys_are_keyed(key):
+    value = _long(44, "Kp7")
+    text = '{"' + key + '": "' + value + '"}'
+    assert refine_spans(text, []) == [DetectedSpan(text=value, category="secret")]
+
+
+@pytest.mark.parametrize("key", ["Id", "Valid", "payload" + "ID", "sha" + "Id", "commit" + "Id"])
+def test_non_id_or_hash_camel_keys_are_not_keyed(key):
+    text = '{"' + key + '": "' + _long(44, "Kp7") + '"}'
+    assert refine_spans(text, []) == []
