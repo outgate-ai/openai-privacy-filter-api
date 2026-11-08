@@ -274,3 +274,16 @@ def test_prefixed_short_hex_id_is_an_identifier_not_a_secret(value):
 def test_long_or_non_hex_prefixed_tokens_stay_secrets(value):
     span = DetectedSpan(text=value, category="secret")
     assert refine_spans("key " + value, [span]) == [span]
+
+
+@pytest.mark.parametrize("value", ["1731" + "065432", "4242", "17310654" + "32123", "4000" + "0000" + "0000" + "0001"])
+def test_bare_digit_run_account_is_an_identifier(value):
+    text = '{"id": ' + value + "}"
+    out = refine_spans(text, [DetectedSpan(text=value, category="account_number")])
+    assert out == [DetectedSpan(text=value, category="entity_id")]
+
+
+@pytest.mark.parametrize("value", ["4242" * 4, "3782" + "822463" + "10005", "DE89" + "3704" + "0044" + "0532" + "0130" + "00", "12-34-56"])
+def test_card_numbers_and_non_digit_accounts_stay_accounts(value):
+    span = DetectedSpan(text=value, category="account_number")
+    assert refine_spans("card " + value, [span]) == [span]

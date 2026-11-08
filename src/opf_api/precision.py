@@ -106,6 +106,28 @@ def is_prefixed_hex_id(text: str) -> bool:
     return _PREFIXED_HEX_ID.match(text) is not None
 
 
+# A bare run of digits tagged ``account_number`` is almost always a machine id
+# (a ticket, an epoch, a build or invoice number): on opf-bench dev 860 of 862
+# such spans are outside gold. Card numbers pass the Luhn check, so a 13-19
+# digit run that does is kept; everything else is relabelled ``entity_id``.
+_DIGIT_RUN = re.compile(r"^[0-9]+$")
+
+
+def _luhn_ok(digits: str) -> bool:
+    total = 0
+    for i, ch in enumerate(reversed(digits)):
+        n = int(ch)
+        if i % 2:
+            n = n * 2 - 9 if n > 4 else n * 2
+        total += n
+    return total % 10 == 0
+
+
+def is_digit_run_id(text: str) -> bool:
+    """True for a bare digit run that cannot be a payment card number."""
+    return _DIGIT_RUN.match(text) is not None and not (13 <= len(text) <= 19 and _luhn_ok(text))
+
+
 # A long opaque value under a JSON id key ("token_id": "<40+ base64/hex chars>")
 # is a credential the model never tags (opf-bench dev: 41 such gold secrets,
 # 13 % of v22's leaked characters, 3 look-alikes; hex values included, gold
@@ -133,7 +155,8 @@ def refine_spans(text: str, spans: list[DetectedSpan]) -> list[DetectedSpan]:
     A ``secret`` that is the stem of a word-like file name is dropped; a
     ``secret`` shaped like a Kubernetes pod name is an identifier, not a
     credential, and is relabelled ``entity_id`` (still anonymized under
-    sensitive_data), as is a prefixed short hex id (``run_<12 hex>``). Long
+    sensitive_data), as is a prefixed short hex id (``run_<12 hex>``) and an
+    ``account_number`` that is a bare digit run failing the card checksum. Long
     opaque values under JSON id keys that nothing covers are added as
     ``secret``.
     """
@@ -151,6 +174,8 @@ def refine_spans(text: str, spans: list[DetectedSpan]) -> list[DetectedSpan]:
         if span.category == "secret" and end >= 0 and is_file_stem_secret(text, span.text, end):
             continue
         if span.category == "secret" and (is_pod_name(span.text) or is_prefixed_hex_id(span.text)):
+            span = DetectedSpan(text=span.text, category="entity_id")
+        if span.category == "account_number" and is_digit_run_id(span.text):
             span = DetectedSpan(text=span.text, category="entity_id")
         out.append(span)
     return out + keyed_long_secrets(text, taken)
