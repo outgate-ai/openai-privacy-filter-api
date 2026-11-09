@@ -221,6 +221,37 @@ _KEYED_LONG = re.compile(r'"([a-z][a-z0-9]*(?:[A-Z][a-z0-9]*)*Id|[a-z_]*_id|id)"
 _HASH_KEY = re.compile(r"commit|sha|hash|digest|checksum|revision|etag", re.I)
 
 
+# A PEM private-key block is a credential whatever the model makes of its
+# base64 body; it is added whole (header to footer) as one ``secret``.
+_PEM_PRIVATE_KEY = re.compile(
+    r"-----BEGIN ([A-Z0-9 ]*PRIVATE KEY)-----[A-Za-z0-9+/=\s\\:,.-]*?(?:-----END \1-----|(?=[\"'`]|$))"
+)
+# A well-formed email address nothing detected (opf-bench dev: 5 such, all
+# gold; Nemotron 483, all gold) is added as ``private_email``.
+_FREE_EMAIL = re.compile(r"(?<![\w.%+-])[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}(?![\w-])")
+_EXPOSURE = ("entity_id", "timestamp")
+
+
+def private_key_blocks(text: str, located: list[tuple[int, int, str]]) -> list[DetectedSpan]:
+    """Whole PEM private-key blocks that no single ``secret`` already covers."""
+    out = []
+    for m in _PEM_PRIVATE_KEY.finditer(text):
+        a, b = m.span()
+        if not any(s <= a and b <= e and cat == "secret" for s, e, cat in located):
+            out.append(DetectedSpan(text=m.group(), category="secret"))
+    return out
+
+
+def uncovered_emails(text: str, located: list[tuple[int, int, str]]) -> list[DetectedSpan]:
+    """Email addresses that no personal or credential detection touches."""
+    out = []
+    for m in _FREE_EMAIL.finditer(text):
+        a, b = m.span()
+        if not any(s < b and a < e and cat not in _EXPOSURE for s, e, cat in located):
+            out.append(DetectedSpan(text=m.group(), category="private_email"))
+    return out
+
+
 def _is_slug_or_path(value: str) -> bool:
     """A lowercase dash-slug (``build-cache-linux-x64-…``) or a value mixing ``-``
     with ``/`` is a name or path, not key material: 28 of CredData's 33
@@ -255,7 +286,8 @@ def refine_spans(
     ``private_person`` that is just an AI product name (Claude, Qwen); a
     ``private_email`` cut short inside an address, or any span the model put
     inside one, is replaced by the whole address as ``private_email`` (kept
-    too if its text occurs elsewhere); a ``secret`` shaped like a Kubernetes pod name is an identifier, not a
+    too if its text occurs elsewhere), and an address nothing detected is
+    added as one; a whole PEM private-key block is added as ``secret``; a ``secret`` shaped like a Kubernetes pod name is an identifier, not a
     credential, and is relabelled ``entity_id`` (still anonymized under
     sensitive_data), as is a prefixed short hex id (``run_<12 hex>``). Long
     opaque values under JSON id keys that nothing covers are added as ``secret``.
@@ -268,6 +300,7 @@ def refine_spans(
     """
     out: list[DetectedSpan] = []
     taken: list[tuple[int, int]] = []
+    located: list[tuple[int, int, str]] = []
     widened: dict[str, DetectedSpan] = {}
     cursor = 0
     for span in spans:
@@ -290,6 +323,7 @@ def refine_spans(
                 if address not in widened:
                     widened[address] = DetectedSpan(text=address, category="private_email")
                     taken.append((lo, hi))
+                    located.append((lo, hi, "private_email"))
                 if span.text not in text.replace(address, "\0"):
                     continue
         if span.category == "private_person" and span.text in AI_PRODUCT_NAMES:
@@ -305,8 +339,16 @@ def refine_spans(
             span = DetectedSpan(text=span.text, category="timestamp")
         if digit_runs_as_entity_id and span.category == "account_number" and is_digit_run_id(span.text):
             span = DetectedSpan(text=span.text, category="entity_id")
+        if start >= 0:
+            located.append((start, end, span.category))
         out.append(span)
-    return out + list(widened.values()) + keyed_long_secrets(text, taken)
+    return (
+        out
+        + list(widened.values())
+        + keyed_long_secrets(text, taken)
+        + private_key_blocks(text, located)
+        + uncovered_emails(text, located)
+    )
 
 
 def _carries_no_structure(source_category: str, text: str) -> bool:

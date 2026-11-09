@@ -381,7 +381,7 @@ def test_whole_or_non_address_emails_are_unchanged():
     handle = DetectedSpan(text="jo" + "doe", category="private_email")
     assert refine_spans("user jodoe here", [handle]) == [handle]
     person = DetectedSpan(text="Jo", category="private_person")
-    assert refine_spans("Jo wrote to " + addr, [person]) == [person]
+    assert refine_spans("Jo wrote to " + addr, [person]) == [person, DetectedSpan(text=addr, category="private_email")]
 
 
 @pytest.mark.parametrize("label", ["secret", "private_person", "private_url"])
@@ -410,3 +410,48 @@ def test_keyed_slug_or_path_values_are_not_secrets(value):
 def test_keyed_base64url_with_dashes_still_counts():
     value = "Kp7-" + "Zq8_" * 10 + "Aa"
     assert refine_spans('{"token' + '_id": "' + value + '"}', []) == [DetectedSpan(text=value, category="secret")]
+
+
+def _pem(kind="RSA PRIVATE KEY", end=True):
+    body = "Ab" + "Cd9+" * 8 + "q8Zk" * 24 + "\n" + "Lp3x" * 16
+    return "-----BEGIN " + kind + "-----\n" + body + ("\n-----END " + kind + "-----" if end else "")
+
+
+@pytest.mark.parametrize("kind", ["RSA PRIVATE KEY", "PRIVATE KEY", "EC PRIVATE KEY", "OPENSSH PRIVATE KEY"])
+def test_pem_private_key_block_becomes_one_secret(kind):
+    block = _pem(kind)
+    part = DetectedSpan(text=block[30:60], category="secret")
+    out = refine_spans("key.pem:\n" + block + "\n", [part])
+    assert out == [part, DetectedSpan(text=block, category="secret")]
+
+
+def test_pem_block_without_footer_runs_to_the_closing_quote():
+    block = _pem(end=False)
+    out = refine_spans('cfg = "' + block + '"', [])
+    assert out == [DetectedSpan(text=block, category="secret")]
+
+
+def test_pem_block_already_covered_or_public_is_left_alone():
+    block = _pem()
+    whole = DetectedSpan(text=block, category="secret")
+    assert refine_spans(block, [whole]) == [whole]
+    public = _pem().replace("RSA PRIVATE KEY", "PUBLIC KEY")
+    assert refine_spans(public, []) == []
+
+
+def test_undetected_email_is_added():
+    addr = _addr()
+    assert refine_spans("write to " + addr + " today", []) == [DetectedSpan(text=addr, category="private_email")]
+
+
+def test_email_already_covered_is_not_added_again():
+    addr = _addr()
+    url = DetectedSpan(text="mailto:" + addr, category="private_url")
+    assert refine_spans("see mailto:" + addr, [url]) == [url]
+    stamp = DetectedSpan(text="2026", category="timestamp")
+    assert refine_spans(addr + " 2026", [stamp]) == [stamp, DetectedSpan(text=addr, category="private_email")]
+
+
+@pytest.mark.parametrize("text", ["user@localhost", "a@b", "name @ example . org", "x@y.z9"])
+def test_non_addresses_are_not_emails(text):
+    assert refine_spans("send to " + text, []) == []
