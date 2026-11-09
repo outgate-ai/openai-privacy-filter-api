@@ -455,3 +455,16 @@ def test_email_already_covered_is_not_added_again():
 @pytest.mark.parametrize("text", ["user@localhost", "a@b", "name @ example . org", "x@y.z9"])
 def test_non_addresses_are_not_emails(text):
     assert refine_spans("send to " + text, []) == []
+
+
+def test_span_crossing_into_an_address_gets_the_address_added():
+    addr = _addr()
+    crossing = DetectedSpan(text="workspace/" + addr[:6], category="secret")
+    out = refine_spans("cd /workspace/" + addr + "/notes", [crossing])
+    assert out == [crossing, DetectedSpan(text=addr, category="private_email")]
+
+
+def test_span_covering_the_whole_address_adds_nothing():
+    addr = _addr()
+    path = DetectedSpan(text="workspace/" + addr, category="secret")
+    assert refine_spans("cd /workspace/" + addr + "/notes", [path]) == [path]

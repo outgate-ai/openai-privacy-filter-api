@@ -243,11 +243,12 @@ def private_key_blocks(text: str, located: list[tuple[int, int, str]]) -> list[D
 
 
 def uncovered_emails(text: str, located: list[tuple[int, int, str]]) -> list[DetectedSpan]:
-    """Email addresses that no personal or credential detection touches."""
+    """Email addresses that no single personal or credential detection covers
+    (untouched, or only crossed by a span that starts or ends outside them)."""
     out = []
     for m in _FREE_EMAIL.finditer(text):
         a, b = m.span()
-        if not any(s < b and a < e and cat not in _EXPOSURE for s, e, cat in located):
+        if not any(s <= a and b <= e and cat not in _EXPOSURE for s, e, cat in located):
             out.append(DetectedSpan(text=m.group(), category="private_email"))
     return out
 
