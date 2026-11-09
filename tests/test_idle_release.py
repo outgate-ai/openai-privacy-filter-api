@@ -79,3 +79,24 @@ def test_release_failure_keeps_serving(fake_engine):
         _post(client)
         time.sleep(IDLE * 4)
         assert fake_engine.release_calls == 2
+
+
+def test_long_input_releases_cache_right_away(fake_engine):
+    long_text = "Nothing sensitive here."
+    app = create_app(
+        engine=fake_engine, model_name="openai-privacy-filter",
+        idle_release_seconds=0, release_after_chars=len(long_text),
+    )
+    with TestClient(app) as client:
+        _post(client)
+        assert fake_engine.release_calls == 1
+
+
+def test_short_input_keeps_cache(fake_engine):
+    app = create_app(
+        engine=fake_engine, model_name="openai-privacy-filter",
+        idle_release_seconds=0, release_after_chars=10_000,
+    )
+    with TestClient(app) as client:
+        _post(client)
+        assert fake_engine.release_calls == 0

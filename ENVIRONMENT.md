@@ -46,6 +46,12 @@ Needs the `onnx` extra (`pip install ".[onnx]"`, included in the CPU image).
 | `OPF_API_BACKEND` | `torch` | `onnx` serves a released model's ONNX export on CPU. |
 | `OPF_API_ONNX_THREADS` | `0` | intra-op threads; 0 lets onnxruntime use the physical cores. |
 
+## GPU memory after long inputs
+
+| Variable | Default | Effect |
+|---|---|---|
+| `OPF_API_RELEASE_AFTER_CHARS` | `20000` | After scanning an input at least this long, cached CUDA memory is handed back (`torch.cuda.empty_cache`), so resident VRAM stays near the model size instead of the largest request seen. `0` disables. Adds a few ms to those requests only; peak memory during a long request is unchanged. |
+
 ## Opt-in precision rules
 
 | Variable | Default | Effect |

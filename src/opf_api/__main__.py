@@ -242,6 +242,7 @@ def main(argv: list[str] | None = None) -> int:
         precision_filters=cfg.precision_filters,
         noisy_categories=cfg.noisy_categories,
         idle_release_seconds=cfg.idle_release_seconds,
+        release_after_chars=cfg.release_after_chars,
         iso_dates_as_timestamp=cfg.iso_dates_as_timestamp,
         digit_runs_as_entity_id=cfg.digit_runs_as_entity_id,
         shadow_engine=shadow_engine,

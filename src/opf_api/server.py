@@ -184,6 +184,7 @@ def create_app(
     precision_filters: bool = True,
     noisy_categories: tuple[str, ...] = DEFAULT_NOISY_CATEGORIES,
     idle_release_seconds: float = 300,
+    release_after_chars: int = 0,
     iso_dates_as_timestamp: bool = False,
     digit_runs_as_entity_id: bool = False,
     shadow_engine: Engine | None = None,
@@ -288,6 +289,10 @@ def create_app(
         last_used = time.monotonic()
         idle_released = False
         spans = engine.redact(text)
+        if release_after_chars and len(text) >= release_after_chars:
+            # A long input leaves its activation peak in PyTorch's cache; hand it
+            # back so resident VRAM tracks the model, not the largest request.
+            engine.release_cached_memory()
         if shadow is not None:
             shadow.submit(request_id, text, spans)
         if precision_filters:

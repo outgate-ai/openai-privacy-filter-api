@@ -14,6 +14,7 @@ CONTEXT_WINDOW_LENGTH_MAX = 131072
 CONTEXT_WINDOW_LENGTH_DEFAULT = CONTEXT_WINDOW_LENGTH_MAX
 
 IDLE_RELEASE_SECONDS_DEFAULT = 300
+RELEASE_AFTER_CHARS_DEFAULT = 20000
 
 PRESIDIO_URL_DEFAULT = "http://presidio:3000"
 PRESIDIO_SCORE_THRESHOLD_DEFAULT = 0.5
@@ -116,6 +117,7 @@ class Config:
     shadow_label: str | None = None
     backend: str = "torch"
     shadow_backend: str | None = None
+    release_after_chars: int = RELEASE_AFTER_CHARS_DEFAULT
     iso_dates_as_timestamp: bool = False
     digit_runs_as_entity_id: bool = False
     onnx_threads: int = 0
@@ -171,6 +173,7 @@ class Config:
             shadow_label=os.environ.get("OPF_API_SHADOW_MODEL_RESOLVED") or None,
             backend=_env_choice("OPF_API_BACKEND", BACKENDS, "torch"),
             shadow_backend=os.environ.get("OPF_API_SHADOW_BACKEND") or None,
+            release_after_chars=_env_int("OPF_API_RELEASE_AFTER_CHARS", RELEASE_AFTER_CHARS_DEFAULT),
             iso_dates_as_timestamp=_env_bool("OPF_API_ISO_DATES_AS_TIMESTAMP", default=False),
             digit_runs_as_entity_id=_env_bool("OPF_API_DIGIT_RUNS_AS_ENTITY_ID", default=False),
             onnx_threads=_env_int("OPF_API_ONNX_THREADS", 0),
@@ -277,6 +280,7 @@ class Config:
             shadow_label=self.shadow_label,
             backend=self.backend,
             shadow_backend=self.shadow_backend,
+            release_after_chars=self.release_after_chars,
             iso_dates_as_timestamp=self.iso_dates_as_timestamp,
             digit_runs_as_entity_id=self.digit_runs_as_entity_id,
             onnx_threads=self.onnx_threads,
